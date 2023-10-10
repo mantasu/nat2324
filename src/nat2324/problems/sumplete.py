@@ -8,7 +8,7 @@ class Sumplete:
         low: int = 1,
         high: int = round(4 * np.log(k * k)),
         deletion_rate: float = 1/3,
-        objective_type: str = "naive",
+        evaluation_type: str = "absolute",
         seed: int = None,
     ):
         # Initialize parameters
@@ -16,7 +16,7 @@ class Sumplete:
         self.low = low
         self.high = high
         self.deletion_rate = deletion_rate
-        self.objective_type = objective_type
+        self.evaluation_type = evaluation_type
 
         # Generate the game: new board, column sums, and row sums
         self.board, self.col_sums, self.row_sums = self.new(seed=seed)
@@ -56,17 +56,17 @@ class Sumplete:
         col_sums = np.sum(board, axis=0)
         row_sums = np.sum(board, axis=1)
 
-        if self.objective_type == "absolute":
+        if self.evaluation_type == "absolute":
             # Check if all row and all col sums are equal
             is_col_eq = np.all(col_sums == self.col_sums)
             is_row_eq = np.all(row_sums == self.row_sums)
-            return is_col_eq and is_row_eq
-        elif self.objective_type == "count":
+            return int(is_col_eq and is_row_eq)
+        elif self.evaluation_type == "sum":
             # Compute the number of correct col and row sums
             col_correct = (col_sums == self.col_sums).sum()
             row_correct = (row_sums == self.row_sums).sum()
             return col_correct + row_correct
-        elif self.objective_type == "distance":
+        elif self.evaluation_type == "distance":
             # Compute the absolute difference between the sums
             col_sums = np.abs(col_sums - self.col_sums)
             row_sums = np.abs(row_sums - self.row_sums)
