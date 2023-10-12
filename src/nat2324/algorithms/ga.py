@@ -1,10 +1,22 @@
 import numpy as np
-from tqdm import tqdm
 from typing import Callable
+from .base_runner import BaseRunner
 
 
-class BinaryGeneticAlgorithm:
-    """
+class BinaryGeneticAlgorithm(BaseRunner):
+    """Optimizer based on *binary* genetic algorithm.
+    
+    A binary genetic algorithm (GA) implementation for solving
+    optimization problems. This implementation uses roulette wheel
+    sampling for selecting individuals for crossover and mutation.
+
+    Note:
+        A better implementation would be to generalize this to a general
+        Genetic Algorithm that can deal variable discrete (an even
+        continuos) cases, with different crossover and mutation types.
+        However, for this assignment, it is sufficient to use a binary
+        GA.
+
     Args:
         N (int, optional): The number of individuals. Defaults to
             ``100``.
@@ -22,27 +34,42 @@ class BinaryGeneticAlgorithm:
             for crossover (n+1 segments will be created and every second
             one will be swapped to create 2 children). Defaults to
             ``1``, meaning single-point crossover.
-        seed (int, optional): The seed for the random number generator.
-            Defaults to ``None``.
+        parallelize_fitness (bool, optional): Whether to parallelize the
+            computation of the fitness scores for each individual.
+            Defaults to ``False``, which should be set if the fitness
+            function is not that complex, in which case running on a
+            single process would be more efficient.
+        seed (int | None, optional): The seed for the random number
+            generator. Defaults to ``None``, which means on every run,
+            the results will be random.
     """
     def __init__(
         self,
+        fitness_fn: Callable[[np.ndarray], float],
         N: int = 100,
         D: int = 9,
-        p_m: float = 0.001,
         p_c: float = 0.7,
+        p_m: float = 0.001,
         elite_frac: float = 0.0,
         num_cross_points: int = 1,
-        seed: int = None,
-    ):  
+        parallelize_fitness: bool = False,
+        seed: int | None = None,
+    ):
+        super().__init__()
+
         # Initialize variables
+        self.fitness_fn = fitness_fn
         self.N = N
         self.D = D
         self.p_c = p_c
         self.p_m = p_m
-        self.num_elites = round(elite_frac * N)
         self.num_cross_points = num_cross_points
+        self.parallelize_fitness = parallelize_fitness
         self.seed = seed
+
+        # Calculate/initialize other variables
+        self.num_elites = round(elite_frac * N)
+        self.rng = np.random.default_rng(seed=seed)
 
     def generate_individuals(self) -> np.ndarray:
         """Generates an initial population of individuals.
@@ -55,8 +82,43 @@ class BinaryGeneticAlgorithm:
             numpy.ndarray: A numpy array of shape ``(N, D)``
             representing the initial population of individuals.
         """
-        np.random.seed(self.seed)
-        return np.random.randint(2, size=(self.N, self.D))
+        return self.rng.integers(2, size=(self.N, self.D))
+    
+    def optimize(
+        self,
+        population: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, float]:
+        """Performs a genetic algorithm optimization.
+
+        This function performs a genetic algorithm optimization for a
+        given fitness function. It uses roulette wheel sampling for
+        selecting individuals for crossover and mutation.
+
+        Args:
+            population (numpy.ndarray): The population of individuals
+                to be evolved. It should be a numpy array of shape
+                ``(N, D)`` where ``N`` is the number of individuals and
+                ``D`` is the number of dimensions for each individual.
+
+        Returns:
+            tuple[numpy.ndarray, typing.Any, float]: A tuple containing
+            the new population, the index of the best individual and its
+            fitness score.
+        """
+        # Compute fitness for each individual (parallelize if large N)
+        fitness = np.array(self.parallel_apply(self.fitness_fn, population)) \
+                  if self.parallelize_fitness else \
+                  np.apply_along_axis(self.fitness_fn, 1, population)
+
+        # Select parents, perform crossover and mutation
+        parents = self.roulette_wheel_sampling(population, fitness)
+        children = self.n_point_crossover(parents)
+        new_population = self.bit_flip_mutation(children)
+
+        # For efficiency, return the results of the previous population
+        best_index = fitness.argmax()
+
+        return new_population, population[best_index], fitness[best_index]
 
     def roulette_wheel_sampling(
         self,
@@ -93,14 +155,11 @@ class BinaryGeneticAlgorithm:
         elites_mask = np.argsort(fitness) > (self.N - self.num_elites)
         elites = population[elites_mask]
 
-        # Calculate the probability of selecting each non-elite member
-        p = fitness[~elites_mask] / fitness[~elites_mask].sum()
-
         # Get the non-elite members based on proportionate sampling
-        parents = np.random.default_rng().choice(
+        parents = self.rng.choice(
             population[~elites_mask],
             size=len(population) - len(elites),
-            p=p,
+            p=f / s if (s:=(f:=fitness[~elites_mask]).sum()) > 0 else None,
         )
 
         return np.vstack([elites, parents])
@@ -145,7 +204,7 @@ class BinaryGeneticAlgorithm:
             num_rows -= 1
 
         # Generate a permutation of row indices, select mating parents
-        indices = np.random.permutation(parents.shape[0])
+        indices = self.rng.permutation(parents.shape[0])
         parents_mating = parents[indices][:num_rows]
         parents_remain = parents[indices][num_rows:]
 
@@ -155,7 +214,7 @@ class BinaryGeneticAlgorithm:
 
         # Generate n random cross points for each pair of parents
         points = np.sort(np.array([
-            np.random.choice(range(1, parents1.shape[1]), n, replace=False)
+            self.rng.choice(range(1, parents1.shape[1]), n, replace=False)
             for _ in range(parents1.shape[0])
         ]), axis=1).astype(np.int64)
 
@@ -177,7 +236,6 @@ class BinaryGeneticAlgorithm:
     def bit_flip_mutation(
         self,
         individuals: np.ndarray,
-        p_m: float = 0.001,
     ) -> np.ndarray:
         """Performs a mutation by flipping bits in binary genomes.
 
@@ -190,7 +248,6 @@ class BinaryGeneticAlgorithm:
         Args:
             individual (numpy.ndarray): The binary genomes of shape
                 (N, D).
-            
 
         Returns:
             numpy.ndarray: Binary genomes of shape (N, D) with mutated
@@ -199,82 +256,16 @@ class BinaryGeneticAlgorithm:
         # Create a copy of individuals
         individuals = individuals.copy()
 
-        # Check which genotypes to mutate and mutate
-        is_mutable = np.random.rand(*individuals.shape) < p_m
+        # Check which genotypes to mutate and mutate them
+        is_mutable = self.rng.random(individuals.shape) < self.p_m
         individuals[is_mutable] = 1 - individuals[is_mutable]
 
         return individuals
-    
-    def optimize(
-        self,
-        fitness_fn: Callable[[np.ndarray], float],
-        max_generations: int = 100,
-        patience: int = 50,
-    ) -> np.ndarray:
-        """Performs a genetic algorithm optimization.
 
-        This function performs a genetic algorithm optimization for a given
-        fitness function. It uses roulette wheel sampling for selecting
-        individuals for crossover and mutation. It also supports early
-        stopping based on the number of generations without improvement.
-
-        Args:
-            fitness_fn (Callable[[numpy.ndarray], float]): A fitness 
-                function that should return a value to be optimized
-                (maximized) given a solution represented as a numpy
-                array of shape (D,).
-            max_generations (int, optional): The maximum number of
-                generations. Defaults to ``100``.
-            patience (int, optional): The number of generations without
-                improvement before early stopping. Set to a value below
-                ``0`` to run without early stopping. Defaults to ``50``.
-
-        Returns:
-            numpy.ndarray: A numpy array of shape ``(D,)`` representing
-            the best solution found.
-        """
-        # Initialize a bag of random solutions
-        population = self.generate_individuals()
-
-        # Init early stopping
-        last_best = -np.inf
-        _patience = 0
-
-        # Initialize progress bar
-        pbar = tqdm(range(max_generations), desc="Current best: N/A")
-
-        for _ in pbar:
-            # Compute fitness for each individual, select the best
-            fitness = np.apply_along_axis(fitness_fn, 1, population)
-            parents = self.roulette_wheel_sampling(population, fitness)
-
-            # Perform crossover and mutation to get the next generation
-            children = self.n_point_crossover(parents)
-            population = self.bit_flip_mutation(children)
-            
-            # Retrieve the best value from population
-            best_solution = fitness.argmax()
-            best_fitness = fitness.max()
-
-            # Update progress bar with current best
-            pbar.set_description(f"Current best {best_fitness:.8f}")
-
-            # Check for termination
-            if patience > 0 and _patience >= patience:
-                break
-            elif best_fitness == last_best:
-                _patience += 1
-            else:
-                _patience = 0
-            
-            # Update last best
-            last_best = best_fitness
-        
-        return best_solution
-
+def fitness_fn(x):
+    return np.sum(x)
 
 if __name__ == "__main__":
-    fitness_fn = lambda x: np.sum(x)
-    ga = BinaryGeneticAlgorithm(N=100, D=20, p_c=0.7, p_m=0.1)
-    solution = ga.optimize(fitness_fn, max_generations=1000, patience=60)
+    ga = BinaryGeneticAlgorithm(fitness_fn, N=1000, D=100, p_c=0.7, p_m=0.001, seed=0)
+    solution = ga.run(max_generations=1000, patience=100, return_score=True, return_duration=True, return_num_gens=True)
     print(solution)
