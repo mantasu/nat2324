@@ -10,7 +10,7 @@ from typing import Callable, Collection, Any
 
 class BaseRunner(ABC):
     @abstractmethod
-    def initialize_population(self) -> Collection[Any]:
+    def initialize_population(self) -> tuple[Collection[Any], tuple[Any]]:
         """Generate initial population.
 
         This function should be implemented by the child class. It
@@ -20,8 +20,9 @@ class BaseRunner(ABC):
         evolve it over generations.
 
         Returns:
-            Collection[typing.Any]: The population of individuals to be
-            optimized.
+            tuple[typing.Collection[Any], tuple[Any]]: The population of
+            individuals to be optimized and any additional data that
+            should be cached and passed to the optimization function.
         """
         ...
 
@@ -30,9 +31,8 @@ class BaseRunner(ABC):
         self,
         population: Collection[Any],
         fitnesses: Collection[float | int],
-        *args,
-        **kwargs,
-    ) -> tuple[Collection[Any], Collection[float | int]]:
+        *cache,
+    ) -> tuple[Collection[Any], Collection[float | int], tuple[Any]]:
         """Optimization method to be implemented by the child class.
 
         This function should be implemented by the child class. It takes
@@ -47,15 +47,14 @@ class BaseRunner(ABC):
                 scores of the individuals in the population. The fitness
                 scores must be in the same order as the individuals in
                 the population.
-            *args: Additional arguments to be passed to the optimization
-                function.
-            **kwargs: Additional keyword arguments to be passed to the
-                optimization function.
+            *cache: Additional arguments to be passed to the
+                optimization function (cache).
 
         Returns:
-            tuple[Collection[Any], typing.Any, int | float]: A tuple
-            containing the new population, the best solution and its
-            fitness score.
+            tuple[typing.Collection[typing.Any], typing.Collection[float | int], tuple[typing.Any]]:
+            A tuple containing the new population, its fitness scores,
+            and any additional data that should be cached and passed to
+            the next call of ``evolve``.
         """
         ...
     
@@ -130,12 +129,11 @@ class BaseRunner(ABC):
         self,
         is_maximization: bool = True,
         max_generations: int = 500,
-        patience: int = 100,
+        patience: int | None = 100,
         return_score: bool = False,
         return_duration: bool = False,
         return_num_gens: bool = False,
         prog_bar: str | bool = "Current best fitness: ",
-        **kwargs,
     ) -> tuple[Any | tuple]:
         """Run the optimization algorithm.
 
@@ -155,8 +153,8 @@ class BaseRunner(ABC):
             max_generations (int, optional): The number of maximum
                 generations to run. Defaults to ``500``.
             patience (int, optional): The number of generations without
-                improvement before early stopping. Set to a value below
-                ``0`` to run without early stopping. Defaults to
+                improvement before early stopping. Set to a value of
+                ``None`` to run without early stopping. Defaults to
                 ``100``.
             return_score (bool, optional): Whether to return the score
                 of the best solution. Defaults to ``False``.
@@ -171,8 +169,6 @@ class BaseRunner(ABC):
                 will be shown automatically with the description
                 specified in the provided string (except `""`). Defaults
                 to ``"Current best fitness: "``.
-            **kwargs: Additional arguments to be passed to
-                :meth:`optimize` except for ``population``.
 
         Returns:
             tuple[typing.Any | tuple]: The best individual and, if
@@ -189,7 +185,7 @@ class BaseRunner(ABC):
         }
 
         # Generate initial population and init patience counter
-        population = self.initialize_population()
+        population, cache = self.initialize_population()
         fitness = [(-1 if is_maximization else 1) * np.inf] * len(population)
         _patience = 0
 
@@ -203,11 +199,11 @@ class BaseRunner(ABC):
 
         for i in pbar:
             # Evolve population and get the best individual + its score
-            population, fitness = self.evolve(population, fitness, **kwargs)
+            population, fitness, cache = self.evolve(population, fitness, *cache)
             idx = np.argmax(fitness) if is_maximization else np.argmin(fitness)
             solution, score = population[idx], fitness[idx]
 
-            if _patience >= patience:
+            if patience is not None and _patience >= patience:
                 # Patience exceeded
                 break
             elif (not is_maximization and score < best["score"]) \
@@ -228,6 +224,15 @@ class BaseRunner(ABC):
 
             # Update progress bar with the current best fitness score
             pbar.set_description(f"Current best {best['score']:.8f}")
+        
+        if patience is None:
+            # Just get the last as best
+            best.update({
+                "solution": solution,
+                "score": score,
+                "duration": pbar.last_print_t - pbar.start_t,
+                "num_gens": i + 1,
+            })
         
         # Create returnables with solution
         returnables = [best["solution"]]
