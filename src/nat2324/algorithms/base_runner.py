@@ -10,7 +10,7 @@ from typing import Callable, Collection, Any
 
 class BaseRunner(ABC):
     @abstractmethod
-    def generate_individuals(self) -> Collection[Any]:
+    def initialize_population(self) -> Collection[Any]:
         """Generate initial population.
 
         This function should be implemented by the child class. It
@@ -26,21 +26,27 @@ class BaseRunner(ABC):
         ...
 
     @abstractmethod
-    def optimize(
+    def evolve(
         self,
         population: Collection[Any],
+        fitnesses: Collection[float | int],
         *args,
         **kwargs,
-    ) -> tuple[Collection[Any], Any, int | float]:
+    ) -> tuple[Collection[Any], Collection[float | int]]:
         """Optimization method to be implemented by the child class.
 
         This function should be implemented by the child class. It takes
-        the population (an iterable of individuals) as input and returns
-        the new population, the best solution and its fitness score.
+        the population (an iterable of individuals) and their fitness
+        values as inputs and returns a new evolved population, along
+        with new fitness scores for each individual.
 
         Args:
             population (typing.Collection[typing.Any]): The population
                 of individuals to be optimized.
+            fitnesses (typing.Collection[float | int]): The fitness
+                scores of the individuals in the population. The fitness
+                scores must be in the same order as the individuals in
+                the population.
             *args: Additional arguments to be passed to the optimization
                 function.
             **kwargs: Additional keyword arguments to be passed to the
@@ -183,7 +189,8 @@ class BaseRunner(ABC):
         }
 
         # Generate initial population and init patience counter
-        population = self.generate_individuals()
+        population = self.initialize_population()
+        fitness = [(-1 if is_maximization else 1) * np.inf] * len(population)
         _patience = 0
 
         # If description is provided, init and wrap progress bar around
@@ -195,8 +202,10 @@ class BaseRunner(ABC):
             pbar.disable = True
 
         for i in pbar:
-            # Apply optimization algorithm to the population
-            population, solution, score = self.optimize(population, **kwargs)
+            # Evolve population and get the best individual + its score
+            population, fitness = self.evolve(population, fitness, **kwargs)
+            idx = np.argmax(fitness) if is_maximization else np.argmin(fitness)
+            solution, score = population[idx], fitness[idx]
 
             if _patience >= patience:
                 # Patience exceeded

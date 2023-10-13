@@ -71,7 +71,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         self.num_elites = round(elite_frac * N)
         self.rng = np.random.default_rng(seed=seed)
 
-    def generate_individuals(self) -> np.ndarray:
+    def initialize_population(self) -> np.ndarray:
         """Generates an initial population of individuals.
 
         Generates a population of N individuals, each of D dimensions.
@@ -84,10 +84,11 @@ class BinaryGeneticAlgorithm(BaseRunner):
         """
         return self.rng.integers(2, size=(self.N, self.D))
     
-    def optimize(
+    def evolve(
         self,
         population: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray, float]:
+        fitness: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Performs a genetic algorithm optimization.
 
         This function performs a genetic algorithm optimization for a
@@ -99,26 +100,26 @@ class BinaryGeneticAlgorithm(BaseRunner):
                 to be evolved. It should be a numpy array of shape
                 ``(N, D)`` where ``N`` is the number of individuals and
                 ``D`` is the number of dimensions for each individual.
+            fitnesses (numpy.ndarray): The fitness scores of the
+                individuals in the population. The fitness scores must
+                be in the same order as the individuals in the
+                population.
 
         Returns:
-            tuple[numpy.ndarray, typing.Any, float]: A tuple containing
-            the new population, the index of the best individual and its
-            fitness score.
+            tuple[numpy.ndarray, numpy.ndarray]: A tuple containing the
+            new population and its corresponding fitness scores.
         """
+        # Select parents, perform crossover and mutation
+        parents = self.roulette_wheel_sampling(population, fitness)
+        children = self.n_point_crossover(parents)
+        population = self.bit_flip_mutation(children)
+
         # Compute fitness for each individual (parallelize if large N)
         fitness = np.array(self.parallel_apply(self.fitness_fn, population)) \
                   if self.parallelize_fitness else \
                   np.apply_along_axis(self.fitness_fn, 1, population)
 
-        # Select parents, perform crossover and mutation
-        parents = self.roulette_wheel_sampling(population, fitness)
-        children = self.n_point_crossover(parents)
-        new_population = self.bit_flip_mutation(children)
-
-        # For efficiency, return the results of the previous population
-        best_index = fitness.argmax()
-
-        return new_population, population[best_index], fitness[best_index]
+        return population, fitness
 
     def roulette_wheel_sampling(
         self,
@@ -159,7 +160,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         parents = self.rng.choice(
             population[~elites_mask],
             size=len(population) - len(elites),
-            p=f / s if (s:=(f:=fitness[~elites_mask]).sum()) > 0 else None,
+            p=fitness / fitness.sum() if len(set(fitness)) > 1 else None,
         )
 
         return np.vstack([elites, parents])
@@ -261,11 +262,3 @@ class BinaryGeneticAlgorithm(BaseRunner):
         individuals[is_mutable] = 1 - individuals[is_mutable]
 
         return individuals
-
-def fitness_fn(x):
-    return np.sum(x)
-
-if __name__ == "__main__":
-    ga = BinaryGeneticAlgorithm(fitness_fn, N=1000, D=100, p_c=0.7, p_m=0.001, seed=0)
-    solution = ga.run(max_generations=1000, patience=100, return_score=True, return_duration=True, return_num_gens=True)
-    print(solution)
