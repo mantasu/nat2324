@@ -1,6 +1,7 @@
-import tqdm
+import time
 import numpy as np
 
+from tqdm.notebook import tqdm
 from functools import partial
 from abc import ABC, abstractmethod
 from multiprocessing.pool import ThreadPool
@@ -9,8 +10,14 @@ from typing import Callable, Collection, Any
 
 
 class BaseRunner(ABC):
+    def __init__(self, N: int, seed: int | None = None):
+        # Set population size, seed, and RNG
+        self.N = N
+        self.seed = seed
+        self.rng = np.random.default_rng(seed=seed)
+
     @abstractmethod
-    def initialize_population(self) -> tuple[Collection[Any], tuple[Any]]:
+    def initialize_population(self) -> Collection[Any]:
         """Generate initial population.
 
         This function should be implemented by the child class. It
@@ -20,9 +27,8 @@ class BaseRunner(ABC):
         evolve it over generations.
 
         Returns:
-            tuple[typing.Collection[Any], tuple[Any]]: The population of
-            individuals to be optimized and any additional data that
-            should be cached and passed to the optimization function.
+            typing.Collection[Any]: The population of individuals
+            (initial solutions) to be optimized (evolved).
         """
         ...
 
@@ -124,16 +130,61 @@ class BaseRunner(ABC):
             results = list(imap)
         
         return results
+    
+    @classmethod
+    def experiment_callback(
+        cls,
+        i: int,
+        **kwargs,
+    ) -> tuple[float | int]:
+        """Callback function to be used in experiments.
+
+        This function is used to run the optimization algorithm in
+        parallel in experiments. It is a wrapper around the
+        :meth:`run` method that accepts a dictionary of arguments
+        instead of a single argument. It is used in experiments to
+        run the optimization algorithm in parallel with different
+        arguments.
+
+        Note:
+            Passed kwargs are mutated, thus, if they have to be reused,
+            make sure to make a deep copy of them before passing to this
+            method.
+
+        Args:
+            i (int): The index of the experiment.
+            **kwargs: The arguments to be passed to the optimization
+                algorithm and the runner.
+
+        Returns:
+            tuple[float | int]: The result of the optimization
+            algorithm.
+        """
+        # Pop keyword arguments for the runner
+        run_kwargs = {
+            "max_generations": kwargs.pop("max_generations", 500),
+            "patience": kwargs.pop("patience", 100),
+            "extra_return": kwargs.pop("extra_return", ("score",)),
+            "is_maximization": kwargs.pop("is_maximization", True),
+            "verbose": kwargs.pop("verbose", False),
+        }
+
+        # By default experiments don't care about solution
+        return_solution = kwargs.pop("return_solution", False)
+
+        # Initialize the algorithm and run
+        algorithm = cls(seed=i, **kwargs)
+        results = algorithm.run(**run_kwargs)
+
+        return results[0 if return_solution else 1:]
 
     def run(
         self,
-        is_maximization: bool = True,
         max_generations: int = 500,
         patience: int | None = 100,
-        return_score: bool = False,
-        return_duration: bool = False,
-        return_num_gens: bool = False,
-        prog_bar: str | bool = "Current best fitness: ",
+        extra_return: tuple[str] = tuple(),
+        is_maximization: bool = True,
+        verbose: bool = True,
     ) -> tuple[Any | tuple]:
         """Run the optimization algorithm.
 
@@ -148,27 +199,27 @@ class BaseRunner(ABC):
         or the early stopping criterion is met.
 
         Args:
-            is_maximization (bool, optional): Whether to maximize or
-                minimize the fitness function. Defaults to ``True``.
             max_generations (int, optional): The number of maximum
                 generations to run. Defaults to ``500``.
             patience (int, optional): The number of generations without
                 improvement before early stopping. Set to a value of
                 ``None`` to run without early stopping. Defaults to
                 ``100``.
-            return_score (bool, optional): Whether to return the score
-                of the best solution. Defaults to ``False``.
-            return_duration (bool, optional): Whether to return the
-                duration (in seconds) it took to run the algorithm.
-                Defaults to ``False``.
-            return_num_gens (bool, optional): The number of total
-                generations it took until the termination condition was
-                reached. Defaults to ``False``.
-            prog_bar (str | bool, optional): Whether to show the
-                progress bar. If :class:`str` is provided, progress bar
-                will be shown automatically with the description
-                specified in the provided string (except `""`). Defaults
-                to ``"Current best fitness: "``.
+            extra_return (tuple, optional): Whether to return additional
+                values. The values can be:
+
+                    * ``"score"`` - the score of the best solution
+                    * ``"duration"`` - the duration (in seconds) it took
+                      to run the algorithm
+                    * ``"num_gens"`` - the number of total generations
+                      it took until the termination condition was
+                      reached
+                    
+                    Defaults to ``tuple()``.
+            is_maximization (bool, optional): Whether to maximize or
+                minimize the fitness function. Defaults to ``True``.
+            verbose (bool, optional): Whether to show the progress bar.
+                Defaults to ``True``.
 
         Returns:
             tuple[typing.Any | tuple]: The best individual and, if
@@ -185,19 +236,15 @@ class BaseRunner(ABC):
         }
 
         # Generate initial population and init patience counter
-        population, cache = self.initialize_population()
+        population, cache = self.initialize_population(), tuple()
         fitness = [(-1 if is_maximization else 1) * np.inf] * len(population)
-        _patience = 0
+        start_time, _patience = time.time(), 0
 
         # If description is provided, init and wrap progress bar around
-        desc = prog_bar + "N/A" if isinstance(prog_bar, str) else None
-        pbar = tqdm.tqdm(range(max_generations), desc, max_generations)
+        desc = "Current best 0.00000000" if verbose else None
+        pbar = tqdm(desc=desc, total=max_generations, disable=not verbose)
 
-        if not prog_bar:
-            # Disable progress bar
-            pbar.disable = True
-
-        for i in pbar:
+        for i in range(max_generations):
             # Evolve population and get the best individual + its score
             population, fitness, cache = self.evolve(population, fitness, *cache)
             idx = np.argmax(fitness) if is_maximization else np.argmin(fitness)
@@ -212,7 +259,7 @@ class BaseRunner(ABC):
                 best.update({
                     "solution": solution,
                     "score": score,
-                    "duration": pbar.last_print_t - pbar.start_t,
+                    "duration": time.time() - start_time,
                     "num_gens": i + 1,
                 })
 
@@ -222,35 +269,36 @@ class BaseRunner(ABC):
                 # Increment patience
                 _patience += 1
 
-            # Update progress bar with the current best fitness score
-            pbar.set_description(f"Current best {best['score']:.8f}")
+            if verbose:
+                # Update progress bar with the current best fitness score
+                pbar.set_description(f"Current best {best['score']:.8f}")
+                pbar.update()
+        
+        # Close the progress bar
+        pbar.close()
         
         if patience is None:
             # Just get the last as best
             best.update({
                 "solution": solution,
                 "score": score,
-                "duration": pbar.last_print_t - pbar.start_t,
+                "duration": time.time() - start_time,
                 "num_gens": i + 1,
             })
         
         # Create returnables with solution
         returnables = [best["solution"]]
         
-        if not return_score and not return_duration and not return_num_gens:
+        if len(extra_return) == 0:
             # Only best individual
             return returnables[0]
-        
-        if return_score:
-            # Aso return best fitness score
-            returnables.append(best["score"])
-        
-        if return_duration:
-            # Return the duration it took to run the algorithm
-            returnables.append(best["duration"])
-        
-        if return_num_gens:
-            # Num generations took until termination
-            returnables.append(best["num_gens"])
+
+        for returnable in extra_return:
+            if returnable not in ("score", "duration", "num_gens"):
+                # Invalid extra return value
+                raise ValueError(f"Invalid extra return value: {returnable}")
+            else:
+                # Add extra return value
+                returnables.append(best[returnable])
         
         return tuple(returnables)

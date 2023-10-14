@@ -31,3 +31,17 @@ $$f(\mathbf{x})=\frac{1}{4000} \sum_{d=1}^D x_d^2-\prod_{d=1}^D \cos \left(\frac
 Schwefel Function: This function is considered to be one of the most difficult among these five functions because it has a large number of local minima and a complex search space. The global minimum is at the bounds of the search space, which makes it particularly challenging for an optimization algorithm to find.
 
 $$f(\mathbf{x})=418.9829 D-\sum_{d=1}^D x_d \sin \left(\sqrt{\left|x_d\right|}\right)$$
+
+From easy to hard to optimize:
+
+Sphere Function: This is typically considered the easiest to optimize. It’s a convex function and doesn’t have any local minima other than the global minimum. The gradient of this function points directly towards the minimum, so gradient-based optimization methods can solve it efficiently.
+
+Rosenbrock Function: This function is more difficult because it has a narrow, curved valley that contains the global minimum. Optimization algorithms need to follow this valley to find the minimum, which can be challenging, especially for high-dimensional problems.
+
+Ackley Function: The Ackley function has many local minima which can trap optimization algorithms. However, the difference between these local minima and the global minimum is relatively small, making it somewhat easier to optimize compared to functions with deep, isolated global minima.
+
+Griewank Function: The Griewank function also has many local minima. The locations of these minima are sinusoidally modulated, which can make it difficult for optimization algorithms to navigate towards the global minimum.
+
+Rastrigin Function: The Rastrigin function is known for its large number of local minima, which are regularly distributed throughout the search space. This makes it very easy for optimization algorithms to get stuck in a local minimum.
+
+Schwefel Function: The Schwefel function is one of the most difficult benchmark functions to optimize. It has a large number of local minima that are irregularly distributed throughout the search space and far from the global minimum.

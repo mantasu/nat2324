@@ -15,25 +15,23 @@ class SwarmOptimization(BaseRunner):
         seed: int | None = None,
         **kwargs,
     ):  
-        super().__init__()
+        super().__init__(N=N, seed=seed)
 
         self.fitness_fn = fitness_fn
         self.bounds = bounds
-        self.N = N
         self.D = D
         self.so_type = so_type
         self.parallelize_fitness = parallelize_fitness
-        self.rng = np.random.default_rng(seed=seed)
         self._init_params(**kwargs)
     
     def _init_params(self, **kwargs):
         match self.so_type:
-            case "plain":
+            case "particle_swarm_optimization" | "pso":
                 # W, alpha1, alpha2
                 self.w = kwargs.get("w", 0.7)
                 self.alpha1 = kwargs.get("alpha1", 2)
                 self.alpha2 = kwargs.get("alpha2", 2)
-                self.alpha3 = kwargs.get("alpha3", 1)
+                self.alpha3 = kwargs.get("alpha3", None)
                 self.max_vel = kwargs.get("max_vel_frac", 0.2) \
                                * (self.bounds[1] - self.bounds[0])
                 self.is_best_ever = kwargs.get("is_best_ever", True)
@@ -42,16 +40,9 @@ class SwarmOptimization(BaseRunner):
     
     def initialize_population(
         self,
-    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray, float]]:
+    ) -> tuple[np.ndarray]:
         # Initialize particle random positions and constant velocities
-        positions = self.rng.uniform(*self.bounds, (self.N, self.D))
-        velocities = np.zeros_like(positions)
-
-        # Init local and global bests
-        local_best = np.copy(positions)
-        global_best = np.copy(positions[0])
-
-        return positions, (velocities, local_best, global_best)
+        return self.rng.uniform(*self.bounds, (self.N, self.D))
 
     def evolve(
         self,
@@ -82,6 +73,10 @@ class SwarmOptimization(BaseRunner):
         fitness: np.ndarray,
         *cache: tuple[np.ndarray, np.ndarray, float],
     ) -> tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray, float]]:
+        if len(cache) == 0:
+            # Create cache if it does not exist with default values
+            cache = np.zeros_like(population), population[:], population[0]
+
         # Unpack population: bests refer to positions, not fitnesses
         positions, (velocities, local_best, global_best) = population, cache
 
