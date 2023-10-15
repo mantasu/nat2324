@@ -45,3 +45,8 @@ Griewank Function: The Griewank function also has many local minima. The locatio
 Rastrigin Function: The Rastrigin function is known for its large number of local minima, which are regularly distributed throughout the search space. This makes it very easy for optimization algorithms to get stuck in a local minimum.
 
 Schwefel Function: The Schwefel function is one of the most difficult benchmark functions to optimize. It has a large number of local minima that are irregularly distributed throughout the search space and far from the global minimum.
+
+References:
+* **Differential Evolution**: https://medium.com/@reshma_shaji/differential-evolution-what-it-is-and-how-does-it-work-81d3415c2367
+* **Cuckoo Search**: https://github.com/ujjwalkhandelwal/cso_cuckoo_search_optimization/blob/main/cso/cso.py and https://medium.com/@evertongomede/cuckoo-search-algorithm-mimicking-nature-for-optimization-2fea1b96c82b
+* **Bat Algorithm**: https://medium.com/it-paragon/bat-algorithm-bad-algorithm-b26ae42da8e1

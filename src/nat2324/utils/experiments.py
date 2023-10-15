@@ -1,3 +1,5 @@
+import os
+import ast
 import numpy as np
 
 from typing import Any, Callable
@@ -8,12 +10,30 @@ from itertools import product
 from tqdm.contrib.concurrent import process_map
 
 
+def make_name(arguments, default_arguments):
+    name = ""
+
+    for key, val in default_arguments.items():
+        name += key + '=' + str(val) + '|'
+
+    name += '[' + ','.join([str(k) for k in arguments.keys()]) + ']' + ".npz"
+    
+    return name
+
 def worker(args):
     _, i, lock, callback, kwargs, num_runs = args
+    new_kwargs = {}
+
+    for key, val in kwargs.items():
+        if isinstance(key, tuple):
+            new_kwargs.update(dict(zip(key, val)))
+        else:
+            new_kwargs[key] = val
+
     result_list = []
     for _ in range(num_runs):
         # Run the callback function; add the result to the list
-        result = callback(i.value, **kwargs)
+        result = callback(i.value, **new_kwargs)
         result = result if isinstance(result, tuple) else [result]
         result_list.append(result)
         
@@ -26,11 +46,26 @@ def worker(args):
 
 def run_optimization_experiment(
     callback: Callable[..., float | int | tuple[float | int]],
-    arguments: dict[str, list[Any]],
+    arguments: dict[str | tuple[str], list[Any]],
     default_arguments: dict[str, Any] = {},
     num_runs: int = 1,
+    chunksize: int = 1,
     is_cartesian_product: bool = False,
+    dirname: str | None = None,
 ) -> dict[str | tuple[str], np.ndarray]:
+    
+    if dirname is not None:
+        filename = make_name(arguments, default_arguments)
+        filepath = os.path.join(dirname, filename)
+    else:
+        filepath = None
+    
+    if filepath is not None and os.path.exists(filepath):
+        # Load the results from the file if it exists
+        data = np.load(filepath)
+        
+        return {ast.literal_eval(key): data[key] for key in data.files}
+
     results = defaultdict(lambda: [])
 
     with Manager() as manager:
@@ -46,7 +81,7 @@ def run_optimization_experiment(
             for key, values in arguments.items():
                 args.extend([(key, i, lock, callback, {**default_arguments, key: argument}, num_runs) for argument in values])
         
-        result_list = process_map(worker, args)
+        result_list = process_map(worker, args, chunksize=chunksize)
                 
         # Add the results to the dictionary
         for res, arg in zip(result_list, args):
@@ -59,12 +94,11 @@ def run_optimization_experiment(
                 # Reshape the results into a multi-dimensional numpy array
                 shape = [len(values) for values in arguments.values()]
                 results[key] = np.reshape(results[key], (*shape, -1))
-
-        # if is_cartesian_product:
-        #     # Reshape the results into a multi-dimensional numpy array
-        #     shape = [len(values) for values in arguments.values()]
-        #     for key in results.keys():
-        #         results[key] = np.reshape(results[key], shape).tolist()
+    
+    if filepath is not None:
+        # Save the results to the file (make dir if it needed)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        np.savez(filepath, **{str(k): v for k, v in results.items()})
     
     return results
                 

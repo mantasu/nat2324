@@ -185,7 +185,7 @@ class BaseRunner(ABC):
         extra_return: tuple[str] = tuple(),
         is_maximization: bool = True,
         verbose: bool = True,
-    ) -> tuple[Any | tuple]:
+    ) -> Any | tuple[Any]:
         """Run the optimization algorithm.
 
         This function runs the optimization algorithm for a given number
@@ -208,12 +208,20 @@ class BaseRunner(ABC):
             extra_return (tuple, optional): Whether to return additional
                 values. The values can be:
 
-                    * ``"score"`` - the score of the best solution
+                    * ``"score"`` - the best score of all time
+                      (throughout all generations).
                     * ``"duration"`` - the duration (in seconds) it took
-                      to run the algorithm
+                      to run the algorithm.
                     * ``"num_gens"`` - the number of total generations
                       it took until the termination condition was
-                      reached
+                      reached.
+                    * ``"last_solution"`` - the best solution at the
+                      last generation.
+                    * ``"last_score"`` - the best score at the last
+                      generation.
+                    * ``"last_duration"`` - the duration (in seconds) it
+                        took to run the algorithm until the last
+                        generation.
                     
                     Defaults to ``tuple()``.
             is_maximization (bool, optional): Whether to maximize or
@@ -233,6 +241,7 @@ class BaseRunner(ABC):
             "score": -np.inf if is_maximization else np.inf,
             "duration": 0,
             "num_gens": 0,
+            "num_upd": 0,
         }
 
         # Generate initial population and init patience counter
@@ -261,6 +270,7 @@ class BaseRunner(ABC):
                     "score": score,
                     "duration": time.time() - start_time,
                     "num_gens": i + 1,
+                    "num_upd": best["num_upd"] + 1,
                 })
 
                 # Reset patience counter
@@ -277,14 +287,13 @@ class BaseRunner(ABC):
         # Close the progress bar
         pbar.close()
         
-        if patience is None:
-            # Just get the last as best
-            best.update({
-                "solution": solution,
-                "score": score,
-                "duration": time.time() - start_time,
-                "num_gens": i + 1,
-            })
+        
+        # Just get the last as best
+        best.update({
+            "last_solution": solution,
+            "last_score": score,
+            "last_duration": time.time() - start_time,
+        })
         
         # Create returnables with solution
         returnables = [best["solution"]]
@@ -294,11 +303,7 @@ class BaseRunner(ABC):
             return returnables[0]
 
         for returnable in extra_return:
-            if returnable not in ("score", "duration", "num_gens"):
-                # Invalid extra return value
-                raise ValueError(f"Invalid extra return value: {returnable}")
-            else:
-                # Add extra return value
-                returnables.append(best[returnable])
+            # Add extra return value
+            returnables.append(best[returnable])
         
         return tuple(returnables)

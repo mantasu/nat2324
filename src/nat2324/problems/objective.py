@@ -71,3 +71,6 @@ class Objective:
     
     def __call__(self, x: np.ndarray) -> float:
         return self.evaluate(x)
+    
+    def __repr__(self) -> str:
+        return f"{self.function_type}-{'min' if self.is_maximization else 'max'}"
