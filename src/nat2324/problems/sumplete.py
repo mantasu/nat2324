@@ -20,6 +20,11 @@ class Sumplete:
 
         # Generate the game: new board, column sums, and row sums
         self.board, self.col_sums, self.row_sums = self.new(seed=seed)
+        
+        self.decay_factor = 0.95
+        self.local_bests = np.zeros((1, self.K ** 2))
+        self.stagnation_counters = np.zeros(1)
+        self.local_best_fitness = 0
 
     def new(
         self,
@@ -65,12 +70,65 @@ class Sumplete:
             # Compute the number of correct col and row sums
             col_correct = (col_sums == self.col_sums).sum()
             row_correct = (row_sums == self.row_sums).sum()
-            return col_correct + row_correct
+            raw_fitness = (col_correct + row_correct) / (self.K * 2)
+        elif self.evaluation_type == "antisum":
+            # Compute the number of incorrect col and row sums
+            col_incorrect = (col_sums != self.col_sums).sum()
+            row_incorrect = (row_sums != self.row_sums).sum()
+            return -(col_incorrect + row_incorrect)
         elif self.evaluation_type == "distance":
             # Compute the absolute difference between the sums
             col_sums = np.abs(col_sums - self.col_sums)
             row_sums = np.abs(row_sums - self.row_sums)
-            return -col_sums.sum() - row_sums.sum()
+            raw_fitness = -col_sums.sum() - row_sums.sum()
+        elif self.evaluation_type == "even":
+            # Compute the number of correct col and row sums
+            col_correct = (col_sums == self.col_sums).sum()
+            row_correct = (row_sums == self.row_sums).sum()
+
+            if col_correct == row_correct:
+                result = col_correct + row_correct
+            elif col_correct - row_correct != 0:
+                result = min(col_correct, row_correct)
+            else:
+                result = 0
+
+            return result
+        elif self.evaluation_type == "included":
+            # Compute the number of correct col and row sums
+            is_col_correct = (col_sums == self.col_sums)
+            is_row_correct = (row_sums == self.row_sums)
+
+            raw_fitness1 = (is_row_correct & is_col_correct[:, None]).sum() / (self.K ** 2)
+            raw_fitness2 = (is_row_correct.sum() + is_row_correct.sum()) / (self.K * 2)
+            raw_fitness = (raw_fitness1 + raw_fitness2) / 2
+
+        # If this is the best solution and its fitness is less than 1
+        # if (cell_mask == self.local_bests).all(axis=1).any() and (raw_fitness < 1):
+        #     # Find the index of the matching local best
+        #     # index = np.where((cell_mask == self.local_bests).all(axis=1))[0][0]
+        #     index = np.argmax((cell_mask == self.local_bests).all(axis=1))
+            
+        #     # Increment the corresponding stagnation counter
+        #     self.stagnation_counters[index] += 1
+            
+        #     # Apply decay factor
+        #     fitness = np.round(raw_fitness * (self.decay_factor ** self.stagnation_counters[index]), 6)
+        #     # print(self.stagnation_counters[index], raw_fitness * (self.K ** 2), fitness)
+        # else:
+        #     # Add the new solution to local_bests
+        #     # self.local_bests = np.append(self.local_bests, [cell_mask], axis=0)
+        #     # Add a new stagnation counter for this solution
+        #     fitness = raw_fitness
+        # print(fitness, self.local_best_fitness)
+        # Update best solution and fitness
+        # if fitness > self.local_best_fitness:
+        #     self.local_bests = np.append(self.local_bests, [cell_mask], axis=0)
+        #     self.stagnation_counters = np.append(self.stagnation_counters, [0], axis=0)
+        #     self.local_best_fitness = fitness
+        
+        return raw_fitness
+
 
     def show(self, mask: np.ndarray = None, num_digits: int = 5):
         # Initialize variables

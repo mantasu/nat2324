@@ -63,8 +63,17 @@ def run_optimization_experiment(
     if filepath is not None and os.path.exists(filepath):
         # Load the results from the file if it exists
         data = np.load(filepath)
+        results = {}
+
+        for key in data.files:
+            try:
+                # Try to parse the key as a Python literal
+                results[ast.literal_eval(key)] = data[key]
+            except ValueError:
+                # If it fails, use the key as a string
+                results[key] = data[key]
         
-        return {ast.literal_eval(key): data[key] for key in data.files}
+        return results
 
     results = defaultdict(lambda: [])
 

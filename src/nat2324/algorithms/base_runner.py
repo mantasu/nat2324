@@ -236,7 +236,7 @@ class BaseRunner(ABC):
             the stopping criteria was met.
         """
         # Init trackable best measures
-        best = {
+        trackable = {
             "solution": None,
             "score": -np.inf if is_maximization else np.inf,
             "duration": 0,
@@ -262,15 +262,14 @@ class BaseRunner(ABC):
             if patience is not None and _patience >= patience:
                 # Patience exceeded
                 break
-            elif (not is_maximization and score < best["score"]) \
-                  or (is_maximization and score > best["score"]):
+            elif (not is_maximization and score < trackable["score"]) \
+                  or (is_maximization and score > trackable["score"]):
                 # Update bests
-                best.update({
+                trackable.update({
                     "solution": solution,
                     "score": score,
                     "duration": time.time() - start_time,
                     "num_gens": i + 1,
-                    "num_upd": best["num_upd"] + 1,
                 })
 
                 # Reset patience counter
@@ -281,7 +280,8 @@ class BaseRunner(ABC):
 
             if verbose:
                 # Update progress bar with the current best fitness score
-                pbar.set_description(f"Current best {best['score']:.8f}")
+                # pbar.set_description(f"Current best {best['score']:.8f}")
+                pbar.set_description(f"Current best {score:.8f}")
                 pbar.update()
         
         # Close the progress bar
@@ -289,14 +289,16 @@ class BaseRunner(ABC):
         
         
         # Just get the last as best
-        best.update({
+        trackable.update({
             "last_solution": solution,
             "last_score": score,
             "last_duration": time.time() - start_time,
+            "last_gen": population,
+            "last_fitness": fitness,
         })
         
         # Create returnables with solution
-        returnables = [best["solution"]]
+        returnables = [trackable["solution"]]
         
         if len(extra_return) == 0:
             # Only best individual
@@ -304,6 +306,6 @@ class BaseRunner(ABC):
 
         for returnable in extra_return:
             # Add extra return value
-            returnables.append(best[returnable])
+            returnables.append(trackable[returnable])
         
         return tuple(returnables)
