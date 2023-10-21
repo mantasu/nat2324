@@ -1,18 +1,26 @@
 import time
-import numpy as np
-
-from tqdm.notebook import tqdm
-from functools import partial
 from abc import ABC, abstractmethod
-from multiprocessing.pool import ThreadPool
+from functools import partial
 from multiprocessing import cpu_count
-from typing import Callable, Collection, Any
+from multiprocessing.pool import ThreadPool
+from typing import Any, Callable, Collection
+
+import numpy as np
+from tqdm.notebook import tqdm
 
 
 class BaseRunner(ABC):
-    def __init__(self, N: int, seed: int | None = None):
+    def __init__(
+        self,
+        fitness_fn: Callable[..., int | float],
+        N: int,
+        parallelize_fitness: bool = False,
+        seed: int | None = None,
+    ):
         # Set population size, seed, and RNG
+        self.fitness_fn = fitness_fn
         self.N = N
+        self.parallelize_fitness = parallelize_fitness
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
 
@@ -27,7 +35,7 @@ class BaseRunner(ABC):
         evolve it over generations.
 
         Returns:
-            typing.Collection[Any]: The population of individuals
+            typing.Collection[typing.Any]: The population of individuals
             (initial solutions) to be optimized (evolved).
         """
         ...
@@ -38,7 +46,10 @@ class BaseRunner(ABC):
         population: Collection[Any],
         fitnesses: Collection[float | int],
         *cache,
-    ) -> tuple[Collection[Any], Collection[float | int], tuple[Any]]:
+    ) -> (
+        tuple[Collection[Any], Collection[float | int]]
+        | tuple[Collection[Any], Collection[float | int], tuple[Any]]
+    ):
         """Optimization method to be implemented by the child class.
 
         This function should be implemented by the child class. It takes
@@ -53,17 +64,23 @@ class BaseRunner(ABC):
                 scores of the individuals in the population. The fitness
                 scores must be in the same order as the individuals in
                 the population.
-            *cache: Additional arguments to be passed to the
+            *cache: Additional optional arguments to be passed to the
                 optimization function (cache).
 
         Returns:
-            tuple[typing.Collection[typing.Any], typing.Collection[float | int], tuple[typing.Any]]:
-            A tuple containing the new population, its fitness scores,
-            and any additional data that should be cached and passed to
-            the next call of ``evolve``.
+            tuple[
+                typing.Collection[typing.Any],
+                typing.Collection[float | int],
+            ] | tuple[
+                typing.Collection[typing.Any],
+                typing.Collection[float | int],
+                tuple[typing.Any],
+            ]: A tuple containing the new population, its fitness
+            scores, and any additional data that should be cached and
+            passed to the next call of :meth:`evolve`.
         """
         ...
-    
+
     @staticmethod
     def parallel_apply(
         worker_fn: Callable[..., Any],
@@ -120,21 +137,21 @@ class BaseRunner(ABC):
         with ThreadPool(num_processes) as pool:
             # Create imap object that will apply workers
             imap = pool.map(worker_fn, iterable)
-            
+
             if prog_bar:
                 # If description is provided, wrap progress bar around
                 desc = prog_bar if isinstance(prog_bar, str) else None
-                imap = tqdm.tqdm(imap, desc, len(iterable))
-            
+                imap = tqdm(imap, desc, len(iterable))
+
             # Actually apply workers
             results = list(imap)
-        
+
         return results
-    
+
     @classmethod
     def experiment_callback(
         cls,
-        i: int,
+        i: int | None = None,
         **kwargs,
     ) -> tuple[float | int]:
         """Callback function to be used in experiments.
@@ -152,7 +169,8 @@ class BaseRunner(ABC):
             method.
 
         Args:
-            i (int): The index of the experiment.
+            i (int | None, optional): The index of the experiment.
+                Defaults to ``None``.
             **kwargs: The arguments to be passed to the optimization
                 algorithm and the runner.
 
@@ -162,27 +180,53 @@ class BaseRunner(ABC):
         """
         # Pop keyword arguments for the runner
         run_kwargs = {
-            "max_generations": kwargs.pop("max_generations", 500),
+            "max_generations": kwargs.pop("max_generations", None),
+            "num_evaluations": kwargs.pop("num_evaluations", None),
             "patience": kwargs.pop("patience", 100),
-            "extra_return": kwargs.pop("extra_return", ("score",)),
+            "returnable": kwargs.pop("returnable", "score"),
             "is_maximization": kwargs.pop("is_maximization", True),
             "verbose": kwargs.pop("verbose", False),
         }
 
-        # By default experiments don't care about solution
-        return_solution = kwargs.pop("return_solution", False)
-
-        # Initialize the algorithm and run
-        algorithm = cls(seed=i, **kwargs)
+        # Initialize the algorithm and run it with seed i
+        algorithm = cls(**{"seed": i, **kwargs})
         results = algorithm.run(**run_kwargs)
 
-        return results[0 if return_solution else 1:]
+        return results
+
+    def evaluate(self, population: Collection[Any]) -> np.ndarray:
+        """Evaluate the fitness function on the population.
+
+        This function evaluates the fitness function on the population
+        and returns the fitness scores. It can be overridden in the
+        child class if a different evaluation method is required.
+
+        Args:
+            population (typing.Collection[typing.Any]): The population
+                of individuals to be optimized.
+
+        Returns:
+            numpy.ndarray: The fitness scores in the same order the
+            individuals in the population. The shape of the array is
+            ``(len(population),)`` and the dtype is either
+            :class:`numpy.float64`. or :class:`numpy.int64`, unless
+            ``self.fitness_fn`` returns a different type.
+        """
+        if self.parallelize_fitness:
+            # Parallelize fitness function evaluations
+            fitnesses = self.parallel_apply(self.fitness_fn, population)
+        else:
+            # Sequential fitness function evaluations
+            fitnesses = np.apply_along_axis(self.fitness_fn, 1, population)
+
+        return fitnesses
 
     def run(
         self,
-        max_generations: int = 500,
+        max_generations: int | None = None,
+        num_evaluations: int | None = None,
         patience: int | None = 100,
-        extra_return: tuple[str] = tuple(),
+        returnable: str | tuple[str] = "solution",
         is_maximization: bool = True,
         verbose: bool = True,
     ) -> Any | tuple[Any]:
@@ -193,84 +237,136 @@ class BaseRunner(ABC):
         its fitness score, the duration it took to run the algorithm,
         and the number of generations it took until the stopping
         criteria was met.
-        
+
         The optimization algorithm is applied to the population
         iteratively until the maximum number of generations is reached
         or the early stopping criterion is met.
 
+        Warning:
+            If ``num_evaluations`` is provided, but it is not a multiple
+            of ``self.N``, it will be rounded up to the nearest
+            multiple of ``self.N``. So, if ``self.N = 10`` and
+            ``num_evaluations = 15``, the algorithm will run for
+            ``2 * self.N = 20`` evaluations, i.e., ``2`` generations.
+
         Args:
             max_generations (int, optional): The number of maximum
-                generations to run. Defaults to ``500``.
+                generations to run. If not provided, ``num_evaluations``
+                will be used instead. Defaults to ``None``.
+            num_evaluations (int, optional): The number of maximum
+                function evaluations to run. If both ``max_generations``
+                and ``num_evaluations`` are not specified, it will
+                default to ``self.N * 100``. Defaults to ``None``.
             patience (int, optional): The number of generations without
                 improvement before early stopping. Set to a value of
                 ``None`` to run without early stopping. Defaults to
                 ``100``.
-            extra_return (tuple, optional): Whether to return additional
-                values. The values can be:
+            returnable (str | tuple[str], optional): The values to be
+                returned. If :class:`str` is provided, only the
+                corresponding value will be returned. If :class:`tuple`
+                is provided, a :class:`tuple` of the corresponding
+                values will be returned. Each value can be one of the
+                following:
 
-                    * ``"score"`` - the best score of all time
+                    * ``"solution"`` - the earliest best solution of all
+                      time (throughout all generations).
+                    * ``"score"`` - the earliest best score of all time
                       (throughout all generations).
+                    * ``"population"`` - the population at the earliest
+                      best score.
+                    * ``"fitnesses"`` - the fitness scores corresponding
+                      to each individual in the population at the
+                      earliest best score.
                     * ``"duration"`` - the duration (in seconds) it took
-                      to run the algorithm.
-                    * ``"num_gens"`` - the number of total generations
-                      it took until the termination condition was
-                      reached.
-                    * ``"last_solution"`` - the best solution at the
-                      last generation.
-                    * ``"last_score"`` - the best score at the last
-                      generation.
-                    * ``"last_duration"`` - the duration (in seconds) it
-                        took to run the algorithm until the last
-                        generation.
-                    
-                    Defaults to ``tuple()``.
+                      to reach the earliest best score.
+                    * ``"num_generations"`` - the number of total
+                      generations the earliest best score was reached.
+                    * ``"num_evaluations"`` - the number of total
+                      function evaluations the earliest best score was
+                      reached. It is an approximate number and always a
+                      multiple of ``self.N``.
+
+                    It is also possible to prepend ``"last_"`` to any of
+                    the above values to get the corresponding value at
+                    the last generation. For example, ``"last_score"``
+                    will return the best score at the last generation.
+                    Defaults to ``"solution"``.
             is_maximization (bool, optional): Whether to maximize or
                 minimize the fitness function. Defaults to ``True``.
             verbose (bool, optional): Whether to show the progress bar.
                 Defaults to ``True``.
 
         Returns:
-            tuple[typing.Any | tuple]: The best individual and, if
-            specified, its fitness score, the duration it took to run
-            the algorithm, and the number of generations it took until
-            the stopping criteria was met.
+            typing.Any | tuple[tuple]: A single value or a tuple of
+            values depending on the ``returnable`` argument. If
+            ``returnable`` is a :class:`str`, a single value will be
+            returned. If ``returnable`` is a :class:`tuple`, a tuple of
+            values will be returned. By default, only the earliest best
+            solution will be returned.
         """
+        if max_generations is None and num_evaluations is None:
+            # If both are not provided, default to 100 * self.N
+            num_evaluations = self.N * 100
+
+        if max_generations is None:
+            # Compute max_generations from num_evaluations
+            max_generations = round(num_evaluations / self.N)
+
+        # Initialize population, fitnesses and other algorithm variables
+        best_index_fn = np.argmax if is_maximization else np.argmin
+        start_time, _patience, cache = time.time(), 0, tuple()
+        population = self.initialize_population()
+        fitnesses = self.evaluate(population)
+
         # Init trackable best measures
         trackable = {
-            "solution": None,
-            "score": -np.inf if is_maximization else np.inf,
-            "duration": 0,
-            "num_gens": 0,
-            "num_upd": 0,
+            "solution": population[best_index_fn(fitnesses)],
+            "score": fitnesses[best_index_fn(fitnesses)],
+            "population": population,
+            "fitnesses": fitnesses,
+            "duration": time.time() - start_time,
+            "num_generations": 0,
+            "num_evaluations": 0,
         }
 
-        # Generate initial population and init patience counter
-        population, cache = self.initialize_population(), tuple()
-        fitness = [(-1 if is_maximization else 1) * np.inf] * len(population)
-        start_time, _patience = time.time(), 0
-
         # If description is provided, init and wrap progress bar around
-        desc = "Current best 0.00000000" if verbose else None
+        desc = "Current best N/A" if verbose else None
         pbar = tqdm(desc=desc, total=max_generations, disable=not verbose)
 
         for i in range(max_generations):
-            # Evolve population and get the best individual + its score
-            population, fitness, cache = self.evolve(population, fitness, *cache)
-            idx = np.argmax(fitness) if is_maximization else np.argmin(fitness)
-            solution, score = population[idx], fitness[idx]
+            # Evolve the population and get the next generation
+            next_generation = self.evolve(population, fitnesses, *cache)
+
+            if len(next_generation) == 2:
+                # If only population and its fitness values are returned
+                population, fitnesses, cache = next_generation, tuple()
+            else:
+                # If additional cached data is returned
+                population, fitnesses, cache = next_generation
+
+            # Get the best individual and its score
+            best_idx = best_index_fn(fitnesses)
+            solution = population[best_idx]
+            score = fitnesses[best_idx]
 
             if patience is not None and _patience >= patience:
                 # Patience exceeded
                 break
-            elif (not is_maximization and score < trackable["score"]) \
-                  or (is_maximization and score > trackable["score"]):
+            elif (not is_maximization and score < trackable["score"]) or (
+                is_maximization and score > trackable["score"]
+            ):
                 # Update bests
-                trackable.update({
-                    "solution": solution,
-                    "score": score,
-                    "duration": time.time() - start_time,
-                    "num_gens": i + 1,
-                })
+                trackable.update(
+                    {
+                        "solution": solution,
+                        "score": score,
+                        "population": population,
+                        "fitnesses": fitnesses,
+                        "duration": time.time() - start_time,
+                        "num_generations": i + 1,
+                        "num_evaluations": (i + 1) * self.N,
+                    }
+                )
 
                 # Reset patience counter
                 _patience = 0
@@ -279,33 +375,33 @@ class BaseRunner(ABC):
                 _patience += 1
 
             if verbose:
-                # Update progress bar with the current best fitness score
-                # pbar.set_description(f"Current best {best['score']:.8f}")
+                # Update progress bar with the current best score
                 pbar.set_description(f"Current best {score:.8f}")
                 pbar.update()
-        
+
         # Close the progress bar
         pbar.close()
-        
-        
-        # Just get the last as best
-        trackable.update({
-            "last_solution": solution,
-            "last_score": score,
-            "last_duration": time.time() - start_time,
-            "last_gen": population,
-            "last_fitness": fitness,
-        })
-        
-        # Create returnables with solution
-        returnables = [trackable["solution"]]
-        
-        if len(extra_return) == 0:
-            # Only best individual
-            return returnables[0]
 
-        for returnable in extra_return:
-            # Add extra return value
-            returnables.append(trackable[returnable])
-        
-        return tuple(returnables)
+        if max_generations > 0:
+            # After all iterations
+            trackable.update(
+                {
+                    "last_solution": solution,
+                    "last_score": score,
+                    "last_population": population,
+                    "last_fitnesses": fitnesses,
+                    "last_duration": time.time() - start_time,
+                    "last_num_generations": i + 1,
+                    "last_num_evaluations": (i + 1) * self.N,
+                }
+            )
+        else:
+            # If max_generations is 0, set last values to initial values
+            trackable.update({f"last_{k}": v for k, v in trackable.items()})
+
+        if isinstance(returnable, str):
+            # Return corresponding value
+            return trackable[returnable]
+        else:
+            # Return a tuple of corresponding multiple values
+            return tuple(trackable[key] for key in returnable)

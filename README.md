@@ -50,3 +50,19 @@ References:
 * **Differential Evolution**: https://medium.com/@reshma_shaji/differential-evolution-what-it-is-and-how-does-it-work-81d3415c2367
 * **Cuckoo Search**: https://github.com/ujjwalkhandelwal/cso_cuckoo_search_optimization/blob/main/cso/cso.py and https://medium.com/@evertongomede/cuckoo-search-algorithm-mimicking-nature-for-optimization-2fea1b96c82b
 * **Bat Algorithm**: https://medium.com/it-paragon/bat-algorithm-bad-algorithm-b26ae42da8e1
+
+
+## Problem 1
+
+However, if we fix the number of generations rather than fitness evaluations, then we can expect the results to be better as more particles are searching for the global optimum, meaning there is a bigger likelihood one of them will hit it.
+
+## Problem 2
+
+If we have 3x3, we have in total 512 possibilities, meaning it's possible to just find a solution with brute force, which is essentially what the algorithm is doing as it acquires no knowledge of the problem as the time-steps pass.
+
+## Problem 3
+
+Problem 3 generality:
+
+explain that using terminals of only integers/variables. We have background information and thus working with real numbers would only approach the solution, but may not solve it completely
+imposed terminal/non-terminal constraints ()
