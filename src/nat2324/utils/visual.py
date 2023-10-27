@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable
+from typing import Any, Callable, Collection
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,9 +63,11 @@ def visualize_optimization_experiments(
     scale: tuple[int, int] = (4, 4),
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
+    ignore_suffix_x: bool = False,
+    ignore_suffix_y: bool = False,
+    ignore_suffix_z: bool = False,
     elev: float = 30.0,
     azim: float = -150.0,
-    is_reverse: bool = False,
 ):
     # Convert the dictionary values to numpy arrays
     xs = {k: np.array(v) for k, v in xs.items()}
@@ -113,19 +115,30 @@ def visualize_optimization_experiments(
         if len(zs) > 1 and titles is None:
             titles = list(zs.keys())
         elif labels is None:
-            labels = list(zs.keys())
+            labels = list(
+                z_key.split("_")[0] if ignore_suffix_z else z_key for z_key in zs.keys()
+            )
+
     else:
         x_keys = x_keys * len(ys) if len(x_keys) == 1 else x_keys
 
         if len(ys) > 1 and titles is None:
             titles = list(ys.keys())
         elif labels is None:
-            labels = list(ys.keys())
+            labels = list(
+                y_key.split("_")[0] if ignore_suffix_y else y_key for y_key in ys.keys()
+            )
 
     labels = (
         [labels] * len(x_keys)
-        if labels is not None and isinstance(labels, str) == 1
+        if labels is not None and isinstance(labels, str)
         else labels
+    )
+
+    titles = (
+        [titles] * len(x_keys)
+        if titles is not None and isinstance(titles, str)
+        else titles
     )
 
     n_cols = min(len(x_keys), max_cols)
@@ -142,7 +155,6 @@ def visualize_optimization_experiments(
             ax.set_box_aspect(aspect=None, zoom=0.85)
 
             X, Y = np.meshgrid(xs[x_key], ys[y_key])
-            print(X.shape, Y.shape, zs[z_key].shape)
             z_key = list(zs.keys())[i]
 
             for j in range(zs[z_key].shape[-1]):
@@ -181,8 +193,10 @@ def visualize_optimization_experiments(
                         f"({xs[x_key][max_x]}, {ys[y_key][max_y]}, {max_z:.2f})",
                     )
 
-            ax.set_xlabel(x_key, fontsize=12, fontweight="bold")
-            ax.set_ylabel(y_key, fontsize=12, fontweight="bold")
+            x_label = x_key.split("_")[0] if ignore_suffix_x else x_key
+            y_label = y_key.split("_")[0] if ignore_suffix_y else y_key
+            ax.set_xlabel(x_label, fontsize=12, fontweight="bold")
+            ax.set_ylabel(y_label, fontsize=12, fontweight="bold")
 
             if labels is not None and len(labels) > 0:
                 ax.set_zlabel(labels[i], fontsize=12, fontweight="bold")
@@ -213,7 +227,8 @@ def visualize_optimization_experiments(
                         fontweight="bold",
                     )
 
-            ax.set_xlabel(x_key, fontsize=12, fontweight="bold")
+            x_label = x_key.split("_")[0] if ignore_suffix_x else x_key
+            ax.set_xlabel(x_label, fontsize=12, fontweight="bold")
 
             if labels is not None and len(labels) > 0:
                 ax.set_ylabel(labels[i], fontsize=12, fontweight="bold")

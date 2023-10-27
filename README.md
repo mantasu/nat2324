@@ -2,55 +2,6 @@
 
 ## About
 
-## Questions
-
-Chosen functions (The difficulty can be varied by changing the dimension D):
-
-Sphere Function: This is the simplest function as it’s unimodal (has only one minimum). The search space is smooth and doesn’t have local minima that could trap an optimization algorithm.
-
-This is a simple unimodal function defined as:
-
-$$f(\mathbf{x})=\sum_{d=1}^Dx_d^2$$
-
-Rosenbrock Function: This function is more difficult than the Sphere function because it’s not separable, meaning the dimensions are interdependent. The function has a narrow, curved valley that contains the global minimum, and finding this valley can be challenging for an optimization algorithm.
-
-$$f(\mathbf{x}) = \sum_{d=1}^{D-1} \left(100(x_{d+1}-x_d^2)^2 + (1 - x_d)^2\right)$$
-
-Rastrigin function: The function is known for its large number of local minima, which makes it more difficult than the Sphere and Rosenbrock functions. The presence of the cosine term creates a complex, oscillating “landscape” with many local minima that can trap optimization algorithms.
-
-$$f(\mathbf{x})=10 D+\sum_{d=1}^D\left[x_d^2-10 \cos \left(2 \pi x_d\right)\right]$$
-
-Ackley Function: This function is more difficult than the Rosenbrock function because it has many local minima in addition to the global minimum. The presence of local minima can cause an optimization algorithm to get stuck and not find the global minimum.
-
-$$f(\mathbf{x})=-20 \exp \left(-0.2 \sqrt{\frac{1}{D} \sum_{d=1}^D x_d^2}\right)-\exp \left(\frac{1}{D} \sum_{d=1}^D \cos \left(2 \pi x_d\right)\right)+20+e$$
-
-Griewank Function: This function is more difficult than the Ackley function because it has many widespread local minima and a complex search space. The oscillations caused by the cosine term make it harder for an optimization algorithm to converge to the global minimum.
-
-$$f(\mathbf{x})=\frac{1}{4000} \sum_{d=1}^D x_d^2-\prod_{d=1}^D \cos \left(\frac{x_d}{\sqrt{d}}\right)+1$$
-
-Schwefel Function: This function is considered to be one of the most difficult among these five functions because it has a large number of local minima and a complex search space. The global minimum is at the bounds of the search space, which makes it particularly challenging for an optimization algorithm to find.
-
-$$f(\mathbf{x})=418.9829 D-\sum_{d=1}^D x_d \sin \left(\sqrt{\left|x_d\right|}\right)$$
-
-From easy to hard to optimize:
-
-Sphere Function: This is typically considered the easiest to optimize. It’s a convex function and doesn’t have any local minima other than the global minimum. The gradient of this function points directly towards the minimum, so gradient-based optimization methods can solve it efficiently.
-
-Rosenbrock Function: This function is more difficult because it has a narrow, curved valley that contains the global minimum. Optimization algorithms need to follow this valley to find the minimum, which can be challenging, especially for high-dimensional problems.
-
-Ackley Function: The Ackley function has many local minima which can trap optimization algorithms. However, the difference between these local minima and the global minimum is relatively small, making it somewhat easier to optimize compared to functions with deep, isolated global minima.
-
-Griewank Function: The Griewank function also has many local minima. The locations of these minima are sinusoidally modulated, which can make it difficult for optimization algorithms to navigate towards the global minimum.
-
-Rastrigin Function: The Rastrigin function is known for its large number of local minima, which are regularly distributed throughout the search space. This makes it very easy for optimization algorithms to get stuck in a local minimum.
-
-Schwefel Function: The Schwefel function is one of the most difficult benchmark functions to optimize. It has a large number of local minima that are irregularly distributed throughout the search space and far from the global minimum.
-
-References:
-* **Differential Evolution**: https://medium.com/@reshma_shaji/differential-evolution-what-it-is-and-how-does-it-work-81d3415c2367
-* **Cuckoo Search**: https://github.com/ujjwalkhandelwal/cso_cuckoo_search_optimization/blob/main/cso/cso.py and https://medium.com/@evertongomede/cuckoo-search-algorithm-mimicking-nature-for-optimization-2fea1b96c82b
-* **Bat Algorithm**: https://medium.com/it-paragon/bat-algorithm-bad-algorithm-b26ae42da8e1
-
 
 ## Problem 1
 
@@ -66,3 +17,55 @@ Problem 3 generality:
 
 explain that using terminals of only integers/variables. We have background information and thus working with real numbers would only approach the solution, but may not solve it completely
 imposed terminal/non-terminal constraints ()
+
+## Disclaimer
+
+### Reverse ranges
+
+In the experiments where `num_evaluations` instead of `max_generations` is used, the range of the population size is reversed, i.e., instead of $\{1, ..., N\}$, we have $\{N, ..., 1\}$ (of course, when plotting, this makes no difference because values are ordered by default).
+
+This is because the experiments are parallelized and the progress bar is updated in the sequence the processes have started, meaning if the first process takes very long to run the experiment and the other ones take very little time to ron other experiments, the progress bar will still only update after the first process finishes, and it will update to `100%` immediately since there would be no other processes to wait. So thus we reverse to see the updates of the progress bar more frequently because it is the case that the first experiments run much longer than the last ones (see below why). This can be considered as an issue with `tqdm` package, specifically, `process_map` method.
+
+Regardless of how many individuals there are (unless $N$ is very large), it is much faster evolve less generations with more individuals than to evolve more generations with less individuals. This is because at each iteration of `evolve`, all the functions are vectorized using `numpy` which uses `C++` under the hood. Now if we run many generations with few individuals, this will be slow because running many _Python_ loops is very slow.
+
+### Rerunning previous cells
+
+Please also note that the cells are designed to be run in sequence and no previous cell is expected to be rerun. This is because most of teh subsequent cells overwrite the variables created by the previous cells (for easier readability, variable names are intended to be kept the same throughout the notebooks for every experiment). So, for example, instead of initializing `N_experiment_1`, `N_experiment_2`, etc., the same variable `N` is refreshed (with possibly different values) in every subsequent cell.
+
+Although this may not be a good practice for long experiments (due to the results possibly getting lost), this is still intended because all the experiments are saved and can be quickly reloaded, in case we need to rerun the cells (e.g., if we change the style of the plots).
+
+### Saving experiment runs
+
+Experiments will be automatically saved as `.npz` files with names generated from variable and static arguments, i.e., based on parameters that are being experimented with and the default ones. Note that, although for static arguments values are also labeled, e.g., if a static parameter is `static_param["num_evaluations"] = 5000`, then the filename will match that, i.e., `num_evaluations=5000.npz`, the same is not done for variable parameters (otherwise there would be too many values), only the parameter names are included, e.g., if a variable parameter is `variable_param['N'] = range(1, 101)`, then the filename will match only the variable name, i.e., `[N].npz`.
+
+For this reason if multiple experiments are performed with different variable parameters, please note that the saved files may override the other ones. So either include some unique ranges for every experiment that uses the same variable parameters or include a dummy label in a static parameters dictionary, e.g., `static_param["version"]=1`.
+
+## Issues
+
+If the notebooks cannot be run due to failed imports, i.e., because `sys.path.append` does not work in an expected way, please perform the following steps:
+
+1. Move `src` directory tree inside `notebooks` folder. The file layout should now look as follows:
+   ```bash
+   └── path/to/nat2324
+     ├── notebooks
+     |    ├── src/nat2324       # The source code (folders and python files)
+     |    ├── problem1.ipynb    # Problem 1 notebook
+     |    ├── problem2.ipynb    # Problem 2 notebook
+     |    └── problem3.ipynb    # Problem 3 notebook
+     └── ...                    # Other files and folders except `src`
+   ``` 
+2. Prepend `src.` before imports from `nat2324`, e.g., the setup cell in `problem1.ipynb` would now look as follows:
+    ```python
+    import numpy as np
+    from src.nat2324.problems import Objective
+    from src.nat2324.algorithms import SwarmOptimization
+    from src.nat2324.utils import *
+    ```
+
+## References
+
+Some of the algorithm implementations (particularly in **problem 1**) took inspiration from existing repositories, or online tutorials:
+
+* **Differential Evolution**: https://medium.com/@reshma_shaji/differential-evolution-what-it-is-and-how-does-it-work-81d3415c2367
+* **Cuckoo Search**: https://github.com/ujjwalkhandelwal/cso_cuckoo_search_optimization/blob/main/cso/cso.py and https://medium.com/@evertongomede/cuckoo-search-algorithm-mimicking-nature-for-optimization-2fea1b96c82b
+* **Bat Algorithm**: https://medium.com/it-paragon/bat-algorithm-bad-algorithm-b26ae42da8e1

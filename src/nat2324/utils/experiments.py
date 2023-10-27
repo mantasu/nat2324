@@ -14,7 +14,7 @@ def make_name(arguments, default_arguments):
     name = ""
 
     for key, val in default_arguments.items():
-        name += key + "=" + str(val) + "|"
+        name += key + "=" + str(val) + ";"
 
     name += "[" + ",".join([str(k) for k in arguments.keys()]) + "]" + ".npz"
 
