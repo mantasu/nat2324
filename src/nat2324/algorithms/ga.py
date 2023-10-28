@@ -1,13 +1,14 @@
+from typing import Callable, Collection
+
 import numpy as np
-from typing import Callable
-from .base_runner import BaseRunner
 from scipy.special import softmax
-from typing import Collection
+
+from .base_runner import BaseRunner
 
 
 class BinaryGeneticAlgorithm(BaseRunner):
     """Optimizer based on *binary* genetic algorithm.
-    
+
     A binary genetic algorithm (GA) implementation for solving
     optimization problems. This implementation uses roulette wheel
     sampling for selecting individuals for crossover and mutation.
@@ -45,6 +46,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
             generator. Defaults to ``None``, which means on every run,
             the results will be random.
     """
+
     def __init__(
         self,
         fitness_fn: Callable[[np.ndarray], float],
@@ -54,24 +56,20 @@ class BinaryGeneticAlgorithm(BaseRunner):
         p_m: float = 0.001,
         elite_frac: float = 0.0,
         num_cross_points: int = 1,
-
         mutation_type: str = "bit_flip",
-
         parallelize_fitness: bool = False,
         seed: int | None = None,
     ):
-        super().__init__(N=N, seed=seed)
+        super().__init__(fitness_fn, N, parallelize_fitness, seed=seed)
 
         # Initialize variables
-        self.fitness_fn = fitness_fn
         self.D = D
         self.p_c = p_c
         self.p_m = p_m
         self.num_cross_points = num_cross_points
-        self.parallelize_fitness = parallelize_fitness
         self.seed = seed
 
-        self.K = np.sqrt(self.D).astype(np.int64) # If x represents matrix
+        self.K = np.sqrt(self.D).astype(np.int64)  # If x represents matrix
         self.row_col_frac = 0.2
         self.num_row_cols = max(1, round(self.K * self.row_col_frac))
 
@@ -83,7 +81,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         self.num_elites = round(elite_frac * N)
 
         self.decay_factor = 0.9995
-        self.local_bests = np.zeros((1, self.K ** 2))
+        self.local_bests = np.zeros((1, self.K**2))
         self.stagnation_counters = np.zeros(1)
         self.local_best_fitness = 0
 
@@ -99,7 +97,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
             representing the initial population of individuals.
         """
         return self.rng.integers(2, size=(self.N, self.D))
-    
+
     def evolve(
         self,
         population: np.ndarray,
@@ -133,39 +131,44 @@ class BinaryGeneticAlgorithm(BaseRunner):
         # population = self.bit_flip(children)
         population = self.mutation(children)
         population = self.escape(population)
-        
+
         # population, elites = self.sample(population, fitness)
         # population = self.mutate(self.crossover(population))
         # population = np.vstack([elites, population])
 
         # Compute fitness for each individual (parallelize if large N)
-        fitness = np.array(self.parallel_apply(self.fitness_fn, population)) \
-                  if self.parallelize_fitness else \
-                  np.apply_along_axis(self.fitness_fn, 1, population)
+        fitness = self.evaluate(population)
+        # fitness = (
+        #     np.array(self.parallel_apply(self.fitness_fn, population))
+        #     if self.parallelize_fitness
+        #     else np.apply_along_axis(self.fitness_fn, 1, population)
+        # )
 
         return population, fitness, cache
-    
+
     def split(
         self,
         population: np.ndarray,
         frac: float = 0.0,
         fitness: Collection[float] | None = None,
-    ) -> tuple[np.ndarray, np.ndarray] \
-       | tuple[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]]:
+    ) -> (
+        tuple[np.ndarray, np.ndarray]
+        | tuple[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]]
+    ):
         # Splits the population randomly or based on fitness
         # frac: fraction of population to select in the first group
 
         # Number of individuals to select
         N = population.shape[0]
         size = round(N * frac)
-        
+
         if fitness is None:
             # Select random individuals for the first group
             indices = self.rng.choice(N, size=size, replace=False)
         else:
             # Select the best individuals for the first group
             indices = np.argpartition(fitness, -size)[-size:]
-        
+
         # Split the population into 2 groups
         population1 = np.array(population)[indices]
         population2 = np.delete(population, indices, axis=0)
@@ -173,27 +176,28 @@ class BinaryGeneticAlgorithm(BaseRunner):
         if fitness is None:
             # Return the 2 population groups
             return population1, population2
-        
+
         # Split the fitness into 2 groups
         fitness1 = np.array(fitness)[indices]
         fitness2 = np.delete(fitness, indices, axis=0)
 
         return (population1, fitness1), (population2, fitness2)
-    
+
     def refit(
         self,
         population: np.ndarray,
         fitness: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
-        
         fitness = np.array(fitness)
-        
+
         # if (fitness >= 1).any():
         #     return population, fitness
-        
+
         non_global = fitness < 1
         is_local = (population[:, None, :] == self.local_bests).all(axis=2)
-        index = np.where(is_local & non_global[:, None])[1] # no need for list(set(...))
+        index = np.where(is_local & non_global[:, None])[
+            1
+        ]  # no need for list(set(...))
         self.stagnation_counters[index] += 1
 
         refit_mask = is_local.any(axis=1) & non_global
@@ -208,18 +212,27 @@ class BinaryGeneticAlgorithm(BaseRunner):
 
         # stagnation_counters_index = np.argmax(is_local[refit_mask], axis=1) // don't use if not all local_bests are unique
 
-        fitness[refit_mask] = np.round(fitness[refit_mask] * (self.decay_factor ** self.stagnation_counters[index]), 8)
+        fitness[refit_mask] = np.round(
+            fitness[refit_mask]
+            * (self.decay_factor ** self.stagnation_counters[index]),
+            8,
+        )
         better_mask = fitness[~refit_mask] > self.local_best_fitness
         new_local_bests = np.unique(population[~refit_mask][better_mask], axis=0)
 
         # print("OOF")
         # print(population[~refit_mask][better_mask])
         # print(new_local_bests)
-        
-        self.local_bests = np.append(self.local_bests, new_local_bests, axis=0)
-        self.stagnation_counters = np.append(self.stagnation_counters, np.zeros(len(new_local_bests)), axis=0)
-        self.local_best_fitness = fitness[~refit_mask][better_mask].max() if better_mask.any() else self.local_best_fitness
 
+        self.local_bests = np.append(self.local_bests, new_local_bests, axis=0)
+        self.stagnation_counters = np.append(
+            self.stagnation_counters, np.zeros(len(new_local_bests)), axis=0
+        )
+        self.local_best_fitness = (
+            fitness[~refit_mask][better_mask].max()
+            if better_mask.any()
+            else self.local_best_fitness
+        )
 
         # Punish local neighbors
         top_local_bests = self.local_bests[self.stagnation_counters >= 2]
@@ -227,34 +240,46 @@ class BinaryGeneticAlgorithm(BaseRunner):
         if True or len(top_local_bests) == 0:
             return population, fitness
 
-        eq_masks = population.reshape(-1, self.K, self.K)[:, None, :, :] == top_local_bests.reshape(-1, self.K, self.K)
+        eq_masks = population.reshape(-1, self.K, self.K)[
+            :, None, :, :
+        ] == top_local_bests.reshape(-1, self.K, self.K)
         col_eq = (eq_masks.sum(axis=3) / self.K) > 0.8
         row_eq = (eq_masks.sum(axis=2) / self.K) > 0.8
         same_row_col_sums = (col_eq + row_eq).sum(axis=-1)
         stag_idx = same_row_col_sums.argmax(axis=-1)
-        
+
         is_damped = same_row_col_sums[range(len(same_row_col_sums)), stag_idx] > 0
         # print(is_damped.shape, same_row_col_sums.shape, stag_idx.shape, same_row_col_sums.max(axis=-1).shape, len(top_local_bests))
         stag_idx = stag_idx[is_damped]
 
         # print(is_damped.sum(), fitness[is_damped].shape)
 
-        num_same = same_row_col_sums[is_damped][range(len(same_row_col_sums[is_damped])), stag_idx]
+        num_same = same_row_col_sums[is_damped][
+            range(len(same_row_col_sums[is_damped])), stag_idx
+        ]
         # msk = num_same >= self.K # num_same.mean() * 0.5
 
-        damp_frac = (same_row_col_sums[is_damped][range(len(same_row_col_sums[is_damped])), stag_idx] + 0 * self.K) / (self.K * 2)
+        damp_frac = (
+            same_row_col_sums[is_damped][
+                range(len(same_row_col_sums[is_damped])), stag_idx
+            ]
+            + 0 * self.K
+        ) / (self.K * 2)
         # damp_frac *= 0.5
-        damped = damp_frac * fitness[is_damped] * (self.decay_factor ** self.stagnation_counters[stag_idx])
+        damped = (
+            damp_frac
+            * fitness[is_damped]
+            * (self.decay_factor ** self.stagnation_counters[stag_idx])
+        )
         # print(damped.shape)
         fitness[is_damped] = np.round(fitness[is_damped] * (1 - damp_frac) + damped, 8)
 
-        
         return population, fitness
-    
+
     def escape(self, population: np.ndarray) -> np.ndarray:
         if self.local_best_fitness >= 1:
             return population
-        
+
         top_local_bests = self.local_bests[self.stagnation_counters >= 30]
         mean = np.round(population.mean(axis=0, keepdims=True))
 
@@ -265,16 +290,18 @@ class BinaryGeneticAlgorithm(BaseRunner):
             self.mean = mean
 
         if self.mean_counter >= 50:
-            top_local_bests = np.append(top_local_bests, mean, axis=0)#[-1:, :]
+            top_local_bests = np.append(top_local_bests, mean, axis=0)  # [-1:, :]
             # print(self.mean_counter, top_local_bests.shape)
-        
-        if self.mean_counter == 30:
-            print("added")
+
+        # if self.mean_counter == 30:
+        #     print("added")
 
         if len(top_local_bests) == 0:
             return population
 
-        eq_masks = population.reshape(-1, self.K, self.K)[:, None, :, :] == top_local_bests.reshape(-1, self.K, self.K)
+        eq_masks = population.reshape(-1, self.K, self.K)[
+            :, None, :, :
+        ] == top_local_bests.reshape(-1, self.K, self.K)
         # col_eq = eq_masks.all(axis=3)
         # row_eq = eq_masks.all(axis=2)
         col_eq = (eq_masks.sum(axis=3) / self.K) > 0.8
@@ -284,13 +311,13 @@ class BinaryGeneticAlgorithm(BaseRunner):
         eq_frac = eq_sums / (self.K * 2)
 
         mask = (eq_frac > 0.3) & (eq_sums.mean() > (0.3 * self.K * 2))
-        print(eq_sums.mean(), mask.sum())
-        
-        #, '\n', eq_sums, '\n', mask)
-        
+        # print(eq_sums.mean(), mask.sum())
+
+        # , '\n', eq_sums, '\n', mask)
+
         # if mask.sum() / self.N > 0.3:
         #     population = self.initialize_population()
-        
+
         population[mask] = self.rng.integers(2, size=(mask.sum(), self.D))
 
         # p_m = self.p_m
@@ -342,7 +369,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         fitness = np.array(fitness)[~elites_mask]
         elites = population[elites_mask]
 
-        if True: #self.rng.random() < 0.5:
+        if True:  # self.rng.random() < 0.5:
             parents = self.tournament_selection(population[~elites_mask], fitness)
         else:
             # T = 2.0
@@ -361,7 +388,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
             )
 
         return np.vstack([elites, parents])
-    
+
     def tournament_selection(self, population, fitness, tournament_size=2):
         # Get the size of the population
         pop_size = population.shape[0]
@@ -380,7 +407,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
             selected[i] = tournament_individuals[winner_index]
 
         return selected
-    
+
     def n_point_crossover(
         self,
         parents: np.ndarray,
@@ -409,13 +436,13 @@ class BinaryGeneticAlgorithm(BaseRunner):
             generated by crossover.
         """
         # Get the elite parents, remove them from the list
-        parents_elite = parents[:self.num_elites]
-        parents = parents[self.num_elites:]
+        parents_elite = parents[: self.num_elites]
+        parents = parents[self.num_elites :]
 
         # Calculate the number of mating parents to sample
         num_rows = round(parents.shape[0] * self.p_c)
         n = self.num_cross_points
-        
+
         if num_rows % 2 != 0:
             # Ensure even
             num_rows -= 1
@@ -429,7 +456,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         [parents1, parents2] = parents_mating.reshape(2, -1, parents.shape[1])
         children1, children2 = parents1.copy(), parents2.copy()
 
-        if False: #self.rng.random() < 0.5:
+        if False:  # self.rng.random() < 0.5:
             K = np.sqrt(self.D).astype(np.int64)
             N = children1.shape[0]
             swap_size = K // 2
@@ -437,25 +464,38 @@ class BinaryGeneticAlgorithm(BaseRunner):
             children1 = children1.reshape(-1, K, K)
             children2 = children2.reshape(-1, K, K)
 
-            indices = self.rng.permuted(np.tile(range(K), (N, 1)), axis=1)[:, :swap_size]
+            indices = self.rng.permuted(np.tile(range(K), (N, 1)), axis=1)[
+                :, :swap_size
+            ]
             mask = self.rng.random(N) < 0.5
             rows = indices[mask]
             cols = indices[~mask]
 
             R = np.arange(N)[mask, None]
             C = np.arange(N)[~mask, None]
-            
-            children1[C, :, cols], children2[C, :, cols] = children2[C, :, cols], children1[C, :, cols]
-            children1[R, rows, :], children2[R, rows, :] = children2[R, rows, :], children1[R, rows, :]
+
+            children1[C, :, cols], children2[C, :, cols] = (
+                children2[C, :, cols],
+                children1[C, :, cols],
+            )
+            children1[R, rows, :], children2[R, rows, :] = (
+                children2[R, rows, :],
+                children1[R, rows, :],
+            )
 
             children1 = children1.reshape(-1, self.D)
             children2 = children2.reshape(-1, self.D)
         else:
             # Generate n random cross points for each pair of parents
-            points = np.sort(np.array([
-                self.rng.choice(range(1, parents1.shape[1]), n, replace=False)
-                for _ in range(parents1.shape[0])
-            ]), axis=1).astype(np.int64)
+            points = np.sort(
+                np.array(
+                    [
+                        self.rng.choice(range(1, parents1.shape[1]), n, replace=False)
+                        for _ in range(parents1.shape[0])
+                    ]
+                ),
+                axis=1,
+            ).astype(np.int64)
 
             if points.shape[1] % 2 != 0:
                 # Add last column of the final indices in case it's missing
@@ -465,13 +505,13 @@ class BinaryGeneticAlgorithm(BaseRunner):
             # True values fall into the ranges specified by idx0 and idx1
             idx0, idx1 = points[:, 0::2, None], points[:, 1::2, None]
             mask = ((idx0 <= range(self.D)) & (range(self.D) <= idx1)).any(axis=1)
-            
+
             # Perform crossover using the mask
             children1[mask] = parents2[mask]
             children2[mask] = parents1[mask]
 
         return np.vstack([parents_elite, parents_remain, children1, children2])
-    
+
     def bit_flip(
         self,
         individuals: np.ndarray,
@@ -503,7 +543,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         individuals[is_mutable] = 1 - individuals[is_mutable]
 
         return individuals
-    
+
     def row_col_gen(
         self,
         individuals: np.ndarray,
@@ -517,7 +557,7 @@ class BinaryGeneticAlgorithm(BaseRunner):
         # Choose indices for rows/cols that will be shuffled
         matrix_idx = np.tile(np.arange(self.K), (len(individuals), 1))
         random_idx = self.rng.permuted(matrix_idx, axis=1)
-        chosen_idx = random_idx[:, :self.num_row_cols]
+        chosen_idx = random_idx[:, : self.num_row_cols]
 
         # Choose which rows and columns to shuffle
         mask = self.rng.random(len(chosen_idx)) < 0.5
@@ -527,13 +567,17 @@ class BinaryGeneticAlgorithm(BaseRunner):
         # print(mask[:2].tolist(), '\n', rows[:2].tolist(), '\n', cols[:2].tolist())
 
         # Regenerate new values for teh chosen rows and columns
-        individuals[R, rows, :] = self.rng.integers(2, size=(len(R), self.num_row_cols, self.K))
-        individuals[C, :, cols] = self.rng.integers(2, size=(len(C), self.num_row_cols, self.K))
+        individuals[R, rows, :] = self.rng.integers(
+            2, size=(len(R), self.num_row_cols, self.K)
+        )
+        individuals[C, :, cols] = self.rng.integers(
+            2, size=(len(C), self.num_row_cols, self.K)
+        )
 
-        # print(individuals[:2])        
+        # print(individuals[:2])
 
         return np.vstack([rest, individuals.reshape(-1, self.D)])
-    
+
     def mutation(self, population: np.ndarray) -> np.ndarray:
         match self.mutation_type:
             case "bit_flip":

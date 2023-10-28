@@ -2,7 +2,7 @@ import time
 from abc import ABC, abstractmethod
 from functools import partial
 from multiprocessing import cpu_count
-from multiprocessing.pool import ThreadPool
+from multiprocessing.pool import Pool
 from typing import Any, Callable, Collection
 
 import numpy as np
@@ -134,7 +134,7 @@ class BaseRunner(ABC):
         # Wrap with partial to accept kwargs
         worker_fn = partial(worker_fn, **kwargs)
 
-        with ThreadPool(num_processes) as pool:
+        with Pool(num_processes) as pool:
             # Create imap object that will apply workers
             imap = pool.map(worker_fn, iterable)
 
@@ -225,6 +225,7 @@ class BaseRunner(ABC):
         self,
         max_generations: int | None = None,
         num_evaluations: int | None = None,
+        best_score: float | int | None = None,
         patience: int | None = 100,
         returnable: str | tuple[str] = "solution",
         is_maximization: bool = True,
@@ -257,6 +258,10 @@ class BaseRunner(ABC):
                 function evaluations to run. If both ``max_generations``
                 and ``num_evaluations`` are not specified, it will
                 default to ``self.N * 100``. Defaults to ``None``.
+            best_score (float | int, optional): The best score of all
+                time (throughout all generations). If provided, the
+                algorithm will stop if it reaches this score. Defaults
+                to ``None``.
             patience (int, optional): The number of generations without
                 improvement before early stopping. Set to a value of
                 ``None`` to run without early stopping. Defaults to
@@ -349,10 +354,12 @@ class BaseRunner(ABC):
             solution = population[best_idx]
             score = fitnesses[best_idx]
 
-            if patience is not None and _patience >= patience:
-                # Patience exceeded
-                break
-            elif (not is_maximization and score < trackable["score"]) or (
+            if verbose:
+                # Update progress bar with the current best score
+                pbar.set_description(f"Current best {score:.8f}")
+                pbar.update()
+
+            if (not is_maximization and score < trackable["score"]) or (
                 is_maximization and score > trackable["score"]
             ):
                 # Update bests
@@ -374,10 +381,15 @@ class BaseRunner(ABC):
                 # Increment patience
                 _patience += 1
 
-            if verbose:
-                # Update progress bar with the current best score
-                pbar.set_description(f"Current best {score:.8f}")
-                pbar.update()
+            if (
+                best_score is not None
+                and (
+                    (is_maximization and score >= best_score)
+                    or (not is_maximization and score <= best_score)
+                )
+            ) or (patience is not None and _patience >= patience):
+                # Patience exceeded
+                break
 
         # Close the progress bar
         pbar.close()
