@@ -3,6 +3,7 @@ import operator
 from abc import ABC, abstractmethod
 from typing import Callable
 
+
 class Symbol(ABC):
     """Abstract base class for symbols.
 
@@ -15,10 +16,11 @@ class Symbol(ABC):
         p (float, optional): The probability of the symbol. Defaults to
             ``None``.
     """
+
     def __init__(self, p: float | None = None):
         # Assign p
         self.p = p
-    
+
     @classmethod
     @abstractmethod
     def get_default(cls) -> set["Symbol"]:
@@ -31,7 +33,7 @@ class Symbol(ABC):
             set[Symbol]: The default set of symbols.
         """
         ...
-    
+
     @staticmethod
     def validate_ps(symbols: set["Symbol"]) -> set["Symbol"]:
         """Validates and adjusts the probabilities of a set of symbols.
@@ -58,7 +60,7 @@ class Symbol(ABC):
         # Calculate the total probability and count those with ``None``
         total_p = sum(symbol.p for symbol in symbols if symbol.p is not None)
         none_count = len([symbol for symbol in symbols if symbol.p is None])
-        
+
         if total_p == 1 and none_count > 0:
             for symbol in symbols:
                 if symbol.p is not None:
@@ -67,18 +69,21 @@ class Symbol(ABC):
                 else:
                     # Halve remaining probability, distribute equally
                     symbol.p = (1 - total_p / 2) / none_count
-        elif total_p != 1 and none_count > 0:
+        elif total_p < 1 and none_count > 0:
             for symbol in symbols:
                 if symbol.p is None:
                     # Distribute remaining probability equally
                     symbol.p = (1 - total_p) / none_count
+        elif total_p > 1 and none_count > 0:
+            # TODO: rescale probabilities
+            raise ValueError("The total probability is greater than 1.")
         elif none_count == 0 and total_p != 1:
             for symbol in symbols:
                 # Rescale probability
                 symbol.p /= total_p
 
         return symbols
-    
+
     def __repr__(self) -> str:
         return str(self)
 
@@ -91,16 +96,16 @@ class Terminal(Symbol):
     ):
         super().__init__(p=p)
         self.value = value
-    
+
     @classmethod
     def get_default(cls) -> set["Terminal"]:
         terminals = {
-            Terminal('x', 1/6),
-            Terminal('y', 1/6),
-            Terminal('z', 1/6),
-            Terminal(0.0, 1/6),
-            Terminal(0.1, 1/6),
-            Terminal(1.0, 1/6),
+            Terminal("x", 1 / 6),
+            Terminal("y", 1 / 6),
+            Terminal("z", 1 / 6),
+            Terminal(0.0, 1 / 6),
+            Terminal(0.1, 1 / 6),
+            Terminal(1.0, 1 / 6),
         }
         return terminals
 
@@ -128,32 +133,32 @@ class NonTerminal(Symbol):
     @classmethod
     def get_default(cls) -> set["NonTerminal"]:
         non_terminals = {
-            cls(operator.add, 2, '+', 1/8),
-            cls(operator.sub, 2, '-', 1/8),
-            cls(operator.mul, 2, '*', 1/8),
-            cls(operator.truediv, 2, '/', 1/8),
-            cls(math.pow, 2, "pow", 1/8),
-            cls(math.log, 1, "log", 1/8),
-            cls(math.cos, 1, "cos", 1/8),
-            cls(math.sin, 1, "sin", 1/8),
+            cls(operator.add, 2, "+", 1 / 8),
+            cls(operator.sub, 2, "-", 1 / 8),
+            cls(operator.mul, 2, "*", 1 / 8),
+            cls(operator.truediv, 2, "/", 1 / 8),
+            cls(math.pow, 2, "pow", 1 / 8),
+            cls(math.log, 1, "log", 1 / 8),
+            cls(math.cos, 1, "cos", 1 / 8),
+            cls(math.sin, 1, "sin", 1 / 8),
         }
         return non_terminals
-    
+
     def __call__(self, *args) -> int | float:
         # Check for division by zero
-        if self.symbol == '/' and args[1] == 0:
+        if self.symbol == "/" and args[1] == 0:
             return args[0]
-        
+
         # Check for invalid values for log
         if self.symbol == "log" and args[0] <= 0:
             return 1
-        
+
         # Check for invalid values for power
         if self.symbol == "pow" and args[0] < 0:
             return args[0]
-        
+
         # Apply the function
         return self.function(*args)
-    
+
     def __str__(self) -> str:
         return str(self.function) if self.name is None else self.name

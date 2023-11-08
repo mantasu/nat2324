@@ -22,7 +22,7 @@ def make_name(arguments, default_arguments):
 
 
 def worker(args):
-    _, i, lock, callback, kwargs, num_runs = args
+    _, i, lock, callback, kwargs, num_runs, average = args
     new_kwargs = {}
 
     for key, val in kwargs.items():
@@ -45,8 +45,11 @@ def worker(args):
         result = result if isinstance(result, tuple) else [result]
         result_list.append(result)
 
-    # Return the mean of the results
-    return np.mean(result_list, axis=0).tolist()
+    if average:
+        # Return the mean of the results
+        return np.mean(result_list, axis=0).tolist()
+    else:
+        return result_list
 
 
 def run_optimization_experiment(
@@ -56,6 +59,7 @@ def run_optimization_experiment(
     num_runs: int = 1,
     chunksize: int = 1,
     is_cartesian_product: bool = False,
+    average: bool = True,
     dirname: str | None = None,
 ) -> dict[str | tuple[str], np.ndarray]:
     if dirname is not None:
@@ -97,6 +101,7 @@ def run_optimization_experiment(
                         callback,
                         {**default_arguments, **arg_dict},
                         num_runs,
+                        average,
                     )
                 )
         else:
@@ -110,6 +115,7 @@ def run_optimization_experiment(
                             callback,
                             {**default_arguments, key: argument},
                             num_runs,
+                            average,
                         )
                         for argument in values
                     ]

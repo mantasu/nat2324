@@ -182,6 +182,7 @@ class BaseRunner(ABC):
         run_kwargs = {
             "max_generations": kwargs.pop("max_generations", None),
             "num_evaluations": kwargs.pop("num_evaluations", None),
+            "best_score": kwargs.pop("best_score", None),
             "patience": kwargs.pop("patience", 100),
             "returnable": kwargs.pop("returnable", "score"),
             "is_maximization": kwargs.pop("is_maximization", True),
@@ -214,7 +215,7 @@ class BaseRunner(ABC):
         """
         if self.parallelize_fitness:
             # Parallelize fitness function evaluations
-            fitnesses = self.parallel_apply(self.fitness_fn, population)
+            fitnesses = np.array(self.parallel_apply(self.fitness_fn, population))
         else:
             # Sequential fitness function evaluations
             fitnesses = np.apply_along_axis(self.fitness_fn, 1, population)
@@ -330,15 +331,15 @@ class BaseRunner(ABC):
             "population": population,
             "fitnesses": fitnesses,
             "duration": time.time() - start_time,
-            "num_generations": 0,
-            "num_evaluations": 0,
+            "num_generations": 1,
+            "num_evaluations": self.N,
         }
 
         # If description is provided, init and wrap progress bar around
         desc = "Current best N/A" if verbose else None
         pbar = tqdm(desc=desc, total=max_generations, disable=not verbose)
 
-        for i in range(max_generations):
+        for i in range(1, max_generations):
             # Evolve the population and get the next generation
             next_generation = self.evolve(population, fitnesses, *cache)
 
