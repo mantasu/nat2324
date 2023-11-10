@@ -340,7 +340,7 @@ class BaseRunner(ABC):
 
         # If description is provided, init and wrap progress bar around
         desc = "Current best N/A" if verbose else None
-        pbar = tqdm(desc=desc, total=max_generations, disable=not verbose)
+        pbar = tqdm(desc=desc, total=max_generations - 1, disable=not verbose)
 
         for i in range(1, max_generations):
             # Evolve the population and get the next generation
@@ -348,7 +348,7 @@ class BaseRunner(ABC):
 
             if len(next_generation) == 2:
                 # If only population and its fitness values are returned
-                population, fitnesses, cache = next_generation, tuple()
+                (population, fitnesses), cache = next_generation, tuple()
             else:
                 # If additional cached data is returned
                 population, fitnesses, cache = next_generation
@@ -398,7 +398,7 @@ class BaseRunner(ABC):
         # Close the progress bar
         pbar.close()
 
-        if max_generations > 0:
+        if max_generations > 1:
             # After all iterations
             trackable.update(
                 {

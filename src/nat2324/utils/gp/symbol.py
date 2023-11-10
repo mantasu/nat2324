@@ -93,7 +93,7 @@ class Symbol(ABC):
 
 
 class Terminal(Symbol):
-    TYPE = Union[int, float, bool, list]
+    TYPE = Union[int, float, bool, list, np.ndarray, np.generic]
 
     def __init__(
         self,

@@ -87,7 +87,7 @@ class GPTree(Node):
         if len(keys) == 0:
             return self.compute()
 
-        if isinstance(kwargs[keys[0]], (int, float, bool, list)):
+        if isinstance(kwargs[keys[0]], Terminal.TYPE):
             return self.compute(**kwargs)
 
         results = []
