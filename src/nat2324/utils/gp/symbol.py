@@ -1,7 +1,11 @@
 import math
 import operator
 from abc import ABC, abstractmethod
-from typing import Callable
+from enum import Enum
+from typing import Any, Callable, Union
+
+import numpy as np
+from anytree import Node
 
 
 class Symbol(ABC):
@@ -21,18 +25,18 @@ class Symbol(ABC):
         # Assign p
         self.p = p
 
-    @classmethod
-    @abstractmethod
-    def get_default(cls) -> set["Symbol"]:
-        """Abstract method to get the default set of symbols.
+    # @classmethod
+    # @abstractmethod
+    # def get_default(cls) -> set["Symbol"]:
+    #     """Abstract method to get the default set of symbols.
 
-        This should return the basic (common) set of symbols: terminals
-        or non-terminals, depending on which class implements this.
+    #     This should return the basic (common) set of symbols: terminals
+    #     or non-terminals, depending on which class implements this.
 
-        Returns:
-            set[Symbol]: The default set of symbols.
-        """
-        ...
+    #     Returns:
+    #         set[Symbol]: The default set of symbols.
+    #     """
+    #     ...
 
     @staticmethod
     def validate_ps(symbols: set["Symbol"]) -> set["Symbol"]:
@@ -89,25 +93,27 @@ class Symbol(ABC):
 
 
 class Terminal(Symbol):
+    TYPE = Union[int, float, bool, list]
+
     def __init__(
         self,
-        value: str | int | float,
+        value: str | int | float | list,
         p: float | None = None,
     ):
         super().__init__(p=p)
         self.value = value
 
-    @classmethod
-    def get_default(cls) -> set["Terminal"]:
-        terminals = {
-            Terminal("x", 1 / 6),
-            Terminal("y", 1 / 6),
-            Terminal("z", 1 / 6),
-            Terminal(0.0, 1 / 6),
-            Terminal(0.1, 1 / 6),
-            Terminal(1.0, 1 / 6),
-        }
-        return terminals
+    # @classmethod
+    # def get_default(cls) -> set["Terminal"]:
+    #     terminals = {
+    #         Terminal("x", 1 / 6),
+    #         Terminal("y", 1 / 6),
+    #         Terminal("z", 1 / 6),
+    #         Terminal(0.0, 1 / 6),
+    #         Terminal(0.1, 1 / 6),
+    #         Terminal(1.0, 1 / 6),
+    #     }
+    #     return terminals
 
     @property
     def is_variable(self) -> bool:
@@ -118,6 +124,8 @@ class Terminal(Symbol):
 
 
 class NonTerminal(Symbol):
+    TYPE = Callable[..., Terminal.TYPE]
+
     def __init__(
         self,
         function: Callable,
@@ -130,35 +138,57 @@ class NonTerminal(Symbol):
         self.arity = arity
         self.name = name
 
-    @classmethod
-    def get_default(cls) -> set["NonTerminal"]:
-        non_terminals = {
-            cls(operator.add, 2, "+", 1 / 8),
-            cls(operator.sub, 2, "-", 1 / 8),
-            cls(operator.mul, 2, "*", 1 / 8),
-            cls(operator.truediv, 2, "/", 1 / 8),
-            cls(math.pow, 2, "pow", 1 / 8),
-            cls(math.log, 1, "log", 1 / 8),
-            cls(math.cos, 1, "cos", 1 / 8),
-            cls(math.sin, 1, "sin", 1 / 8),
-        }
-        return non_terminals
+    # @classmethod
+    # def get_default(cls) -> set["NonTerminal"]:
+    #     non_terminals = {
+    #         cls(operator.add, 2, "+", 1 / 8),
+    #         cls(operator.sub, 2, "-", 1 / 8),
+    #         cls(operator.mul, 2, "*", 1 / 8),
+    #         cls(operator.truediv, 2, "/", 1 / 8),
+    #         cls(math.pow, 2, "pow", 1 / 8),
+    #         cls(math.log, 1, "log", 1 / 8),
+    #         cls(math.cos, 1, "cos", 1 / 8),
+    #         cls(math.sin, 1, "sin", 1 / 8),
+    #     }
+    #     return non_terminals
 
-    def __call__(self, *args) -> int | float:
-        # Check for division by zero
-        if self.symbol == "/" and args[1] == 0:
-            return args[0]
+    @property
+    def is_flow(self) -> bool:
+        return self.name in {"->", "if", "for"}
 
-        # Check for invalid values for log
-        if self.symbol == "log" and args[0] <= 0:
-            return 1
+    def is_valid(self, *args) -> bool:
+        return True
 
-        # Check for invalid values for power
-        if self.symbol == "pow" and args[0] < 0:
-            return args[0]
+    def pre_validate(self, args: tuple[Any]) -> tuple[Any]:
+        # Can be Any, e.g., flow non-terminals accept any
+        # Non-flow terminals accept only tuple[Terminal.TYPE]
+        return args
 
-        # Apply the function
-        return self.function(*args)
+    def post_validate(self, arg: Terminal.TYPE) -> Terminal.TYPE:
+        return arg
+
+    # def __call__(self, *args) -> int | float:
+    #     # Check for division by zero
+    #     if self.symbol == "/" and args[1] == 0:
+    #         return args[0]
+
+    #     # Check for invalid values for log
+    #     if self.symbol == "log" and args[0] <= 0:
+    #         return 1
+
+    #     # Check for invalid values for power
+    #     if self.symbol == "pow" and args[0] < 0:
+    #         return args[0]
+
+    #     # Apply the function
+    #     return self.function(*args)
+
+    def __call__(self, *args, **kwargs) -> Terminal.TYPE:
+        args = self.pre_validate(args)
+        result = self.function(*args, **kwargs)
+        result = self.post_validate(result)
+
+        return result
 
     def __str__(self) -> str:
         return str(self.function) if self.name is None else self.name

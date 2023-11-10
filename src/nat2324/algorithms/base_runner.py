@@ -216,9 +216,12 @@ class BaseRunner(ABC):
         if self.parallelize_fitness:
             # Parallelize fitness function evaluations
             fitnesses = np.array(self.parallel_apply(self.fitness_fn, population))
-        else:
-            # Sequential fitness function evaluations
+        elif isinstance(population[0], Collection):
+            # Sequential fitness function evaluations on 2D population
             fitnesses = np.apply_along_axis(self.fitness_fn, 1, population)
+        else:
+            # Sequential fitness function evaluations on 1D population
+            fitnesses = np.array([self.fitness_fn(ind) for ind in population])
 
         return fitnesses
 
