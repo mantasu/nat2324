@@ -220,7 +220,7 @@ class Flow(NonTerminal):
             num_iters = int(num_iters)
         elif isinstance(num_iters, list):
             # Get the first element from the list
-            num_iters = len(num_iters)
+            num_iters = 1  # len(num_iters)
         elif not isinstance(num_iters, int):
             # Anything else is invalid
             num_iters = 1

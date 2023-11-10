@@ -90,9 +90,13 @@ class GeneticProgrammingAlgorithm(BaseRunner):
     def hoist(self, tree: GPTree) -> GPTree:
         # Select a random subtree
         subtree = self.rng.choice(tree.descendants)
-        # Replace the subtree's parent with the subtree
-        subtree.parent = subtree.parent.parent
-        return tree
+        subtree.parent = None
+
+        # if subtree.parent.parent is not None:
+        #     # Replace the subtree's parent with the subtree
+        #     subtree.parent = subtree.parent.parent
+
+        return subtree
 
     def shrink(self, tree: GPTree) -> GPTree:
         # Select a random subtree
@@ -101,26 +105,47 @@ class GeneticProgrammingAlgorithm(BaseRunner):
 
         # Replace the subtree with a terminal node
         terminal_node = GPTree(str(terminal), terminal)
-        subtree.parent = terminal_node
+
+        children = tuple(
+            child if child != subtree else terminal_node
+            for child in subtree.parent.children
+        )
+        terminal_node.parent, subtree.parent = subtree.parent, None
+        terminal_node.parent.children = children
+
+        # subtree.parent = terminal_node
         return tree
 
     def renew(self, tree: GPTree) -> GPTree:
         # Select a random subtree
         subtree = self.rng.choice(tree.descendants)
         # Replace the subtree with a new randomly generated tree
-        new_max_depth = self.max_depth - subtree.height
-        new_tree = self.generate_individual(max_depth=new_max_depth)
-        subtree.parent = new_tree
+        max_depth = max(1, self.max_depth - subtree.height)
+        new_tree = self.generate_individual(max_depth=max_depth)
+
+        children = tuple(
+            child if child != subtree else new_tree for child in subtree.parent.children
+        )
+        new_tree.parent, subtree.parent = subtree.parent, None
+        new_tree.parent.children = children
+
         return tree
 
     def grow(self, tree: GPTree):
         # Select a random subtree
         subtree = self.rng.choice(tree.descendants)
+
         # Calculate the new maximum depth
-        new_max_depth = self.max_depth - subtree.height
+        max_depth = max(1, self.max_depth - (tree.height - subtree.height))
         # Replace the subtree with a new randomly generated tree of maximum depth new_max_depth
-        new_tree = self.generate_individual(max_depth=new_max_depth)
-        subtree.parent = new_tree
+        new_tree = self.generate_individual(max_depth=max_depth)
+
+        children = tuple(
+            child if child != subtree else new_tree for child in subtree.parent.children
+        )
+        new_tree.parent, subtree.parent = subtree.parent, None
+        new_tree.parent.children = children
+
         return tree
 
     def mutate(self, tree):
@@ -128,6 +153,7 @@ class GeneticProgrammingAlgorithm(BaseRunner):
 
         if mutation_type == "mixed":
             mutation_type = self.rng.choice(["hoist", "shrink", "renew", "grow"])
+            mutation_type = self.rng.choice(["shrink", "regen"])
 
         if mutation_type == "hoist":
             return self.hoist(tree)
@@ -137,13 +163,12 @@ class GeneticProgrammingAlgorithm(BaseRunner):
             return self.renew(tree)
         elif mutation_type == "grow":
             return self.grow(tree)
+        elif mutation_type == "regen":
+            return self.generate_individual()
 
     def cross(self, parent1: GPTree, parent2: GPTree) -> tuple[GPTree, GPTree]:
         # Select a random node from each parent
         # print("HS before", parent1.height, parent2.height)
-
-        parent1.show()
-        parent2.show()
 
         # Choose a random node from each parent (that is at least of height 2)
         # node1 = self.rng.choice(self.rng.choice(parent1.children).descendants)
@@ -178,9 +203,6 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         node2.parent.children = children1
 
         # print("HS after", parent1.height, parent2.height)
-
-        parent1.show()
-        parent2.show()
 
         # return copy.deepcopy(parent1), copy.deepcopy(parent2)
         return parent1, parent2

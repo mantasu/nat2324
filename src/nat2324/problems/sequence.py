@@ -109,23 +109,55 @@ class Sequence:
     ) -> float:
         xs = self.x_test if is_test else self.x_train
         ys = self.y_test if is_test else self.y_train
-        fitness = 0
+        fitnesses = []
 
         for x, y in zip(xs, ys):
+            fitness = 0
             # Predict sequence TODO: fix this (s should be automatic)
             y_pred = tree(x=x, s=[])
 
-            if not isinstance(y_pred, (list, tuple, np.ndarray)):
+            if not isinstance(y_pred, Collection):
                 return 0
 
+            if isinstance(y_pred, Collection):
+                fitness += 0.05 * 1
+
+            if len(y_pred) > 1:
+                fitness += 0.05 * 1
+
+            if len(y_pred) <= len(y):
+                fitness += 0.4 * self.loss_fn(
+                    np.array([len(y)]), np.array([len(y_pred)])
+                )
+
+            # print(
+            #     "Len loss",
+            #     len(y),
+            #     len(y_pred),
+            #     self.loss_fn(np.array([len(y)]), np.array([len(y_pred)])),
+            # )
+
             # Truncate to the length of the shortest list
-            min_len = min(len(y_pred), len(ys))
+            min_len = min(len(y_pred), len(y))
             y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
-            y, y_remain = y[:min_len], y_pred[min_len:]
+            y, y_remain = y[:min_len], y[min_len:]
             remain = y_pred_remain + y_remain
 
             # Calculate fitness
-            fitness += self.loss_fn(np.array(y), np.array(y_pred))
-            fitness += self.loss_fn(np.array(remain), np.zeros_like(remain))
+            if len(y_pred) != 0:
+                fitness += 0.5 * self.loss_fn(np.array(y), np.array(y_pred))
 
-        return fitness
+            # print("match loss", self.loss_fn(np.array(y), np.array(y_pred)))
+
+            # if len(remain) != 0:
+            #     fitness += 0.33 * self.loss_fn(np.array(remain), np.zeros_like(remain))
+            #     # print(
+            #     #     "non-match loss",
+            #     #     self.loss_fn(np.array(remain), np.zeros_like(remain)),
+            #     # )
+
+            fitnesses.append(fitness)
+
+        # print(np.mean(fitnesses))
+
+        return np.mean(fitnesses)

@@ -55,7 +55,9 @@ class GPTree(Node):
                     non_terminals=non_terminals,
                     rng=rng,
                 )
-                for _ in range(non_terminal.arity)
+                if i != 0 and non_terminal.name not in {"push", "get"}
+                else cls(name="s", symbol=Terminal("s"))
+                for i in range(non_terminal.arity)
             ]
             node = cls(str(non_terminal), non_terminal, children=children)
 
