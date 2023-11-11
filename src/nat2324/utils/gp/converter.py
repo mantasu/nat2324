@@ -1,16 +1,20 @@
+from typing import Collection
+
 import numpy as np
 
+from .symbol import Terminal
 
-def is_nested_list(a: list) -> bool:
+
+def is_nested_list(a: Collection) -> bool:
     """Checks whether the given list is nested.
 
     Args:
-        a (list): The list to check.
+        a (typing.Collection): The list to check.
 
     Returns:
         bool: Whether the given list is nested.
     """
-    return any(isinstance(i, list) for i in a)
+    return any(isinstance(i, Collection) for i in a)
 
 
 def numpify(
@@ -55,22 +59,29 @@ def numpify(
     min_len = np.inf
     valid_args = []
 
+    # print("My args", args)
+
     for arg in args:
         # Convert to regular type (to normalize, e.g., int vs np.int64)
         arg = arg.tolist() if isinstance(arg, (np.ndarray, np.generic)) else arg
 
-        if not isinstance(arg, (int, float, bool)) or (
-            isinstance(arg, list) and is_nested_list(arg)
+        if not isinstance(arg, Terminal.TYPE) or (
+            isinstance(arg, Collection) and is_nested_list(arg)
         ):
             # Replace the argument with the default value
             valid_args.append(default)
-        elif isinstance(arg, list):
+        elif isinstance(arg, Collection) and len(arg) == 0:
+            # Replace the argument with the default value
+            valid_args.append(0)
+        elif isinstance(arg, Collection):
             # Convert the argument to a numpy array
-            valid_args.append(np.array([bool(arg) if as_bool else arg]))
+            valid_args.append(np.array([bool(a) if as_bool else a for a in arg]))
             min_len = min(min_len, len(arg))
         else:
             # Leave the argument as it is (convert maybe to bool)
             valid_args.append(bool(arg) if as_bool else arg)
+
+    # print(min_len, valid_args)
 
     if min_len < np.inf:
         for i, arg in enumerate(valid_args):

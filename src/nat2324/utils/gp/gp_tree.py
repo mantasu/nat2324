@@ -86,6 +86,8 @@ class GPTree(Node):
     def __call__(self, **kwargs) -> list[float | int | bool]:
         keys = list(kwargs.keys())
 
+        # self.show()
+
         if len(keys) == 0:
             return self.compute()
 

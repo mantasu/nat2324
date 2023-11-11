@@ -153,7 +153,7 @@ class GeneticProgrammingAlgorithm(BaseRunner):
 
         if mutation_type == "mixed":
             mutation_type = self.rng.choice(["hoist", "shrink", "renew", "grow"])
-            mutation_type = self.rng.choice(["shrink", "regen"])
+            # mutation_type = self.rng.choice(["shrink", "regen"])
 
         if mutation_type == "hoist":
             return self.hoist(tree)

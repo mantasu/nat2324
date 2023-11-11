@@ -184,9 +184,20 @@ class NonTerminal(Symbol):
     #     return self.function(*args)
 
     def __call__(self, *args, **kwargs) -> Terminal.TYPE:
+        yes = (
+            len(args) == 2
+            and isinstance(args[0], list)
+            and isinstance(args[1], list)
+            and len(args[0]) != len(args[1])
+        )
+        # if yes:
+        #     raise ValueError("Uneven")
+        # print("raw", args)
         args = self.pre_validate(args)
+        # print("val", args)
         result = self.function(*args, **kwargs)
         result = self.post_validate(result)
+        # print("post", result)
 
         return result
 

@@ -114,7 +114,7 @@ class Sequence:
         for x, y in zip(xs, ys):
             fitness = 0
             # Predict sequence TODO: fix this (s should be automatic)
-            y_pred = tree(x=x, s=[])
+            y_pred = tree(x=x - 2, s=[0, 1])
 
             if not isinstance(y_pred, Collection):
                 return 0
@@ -126,9 +126,13 @@ class Sequence:
                 fitness += 0.05 * 1
 
             if len(y_pred) <= len(y):
-                fitness += 0.4 * self.loss_fn(
+                fitness += 0.3 * self.loss_fn(
                     np.array([len(y)]), np.array([len(y_pred)])
                 )
+
+            if len(y_pred) != len(y):
+                fitnesses.append(fitness)
+                continue
 
             # print(
             #     "Len loss",
@@ -145,12 +149,12 @@ class Sequence:
 
             # Calculate fitness
             if len(y_pred) != 0:
-                fitness += 0.5 * self.loss_fn(np.array(y), np.array(y_pred))
+                fitness += 0.6 * self.loss_fn(np.array(y), np.array(y_pred))
 
             # print("match loss", self.loss_fn(np.array(y), np.array(y_pred)))
 
             # if len(remain) != 0:
-            #     fitness += 0.33 * self.loss_fn(np.array(remain), np.zeros_like(remain))
+            #     fitness += 0.2 * self.loss_fn(np.array(remain), np.zeros_like(remain))
             #     # print(
             #     #     "non-match loss",
             #     #     self.loss_fn(np.array(remain), np.zeros_like(remain)),

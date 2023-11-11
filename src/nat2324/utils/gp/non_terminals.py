@@ -33,8 +33,8 @@ class Arithmetic(NonTerminal):
     def mod(cls) -> NonTerminal:
         return cls(operator.mod, 2, "%")
 
-    def is_valid(self, *args) -> bool:
-        return all(isinstance(arg, (int, float, bool, list)) for arg in args)
+    # def is_valid(self, *args) -> bool:
+    #     return all(isinstance(arg, (int, float, bool, list)) for arg in args)
 
     def pre_validate(
         self,
@@ -171,8 +171,8 @@ class Logic(NonTerminal):
     def not_(cls) -> NonTerminal:
         return NonTerminal(operator.not_, 1, "!")
 
-    def is_valid(self, *args) -> bool:
-        return all(isinstance(arg, (int, float, bool, list)) for arg in args)
+    # def is_valid(self, *args) -> bool:
+    #     return all(isinstance(arg, (int, float, bool, list)) for arg in args)
 
     def pre_validate(
         self,
@@ -214,19 +214,24 @@ class Flow(NonTerminal):
     ) -> Terminal.TYPE:
         # Get the number of iterations
         num_iters = num_iters(**kwargs)
+        # print("My number", numpify(num_iters, default=1).tolist())
+        num_iters = numpify(num_iters, default=1).tolist()
+        # num_iters = 1 if len(num_iters) == 0 else num_iters[-1]
 
-        if isinstance(num_iters, float):
-            # Convert float to int
-            num_iters = int(num_iters)
-        elif isinstance(num_iters, list):
-            # Get the first element from the list
-            num_iters = 1  # len(num_iters)
-        elif not isinstance(num_iters, int):
-            # Anything else is invalid
+        if len(num_iters) > 0 and isinstance(num_iters[-1], (float, int)):
+            num_iters = min(1000, max(1, int(num_iters[-1])))
+        else:
             num_iters = 1
 
-        # Ensure the number of iterations is valid
-        num_iters = min(1000, max(1, num_iters))
+        # if isinstance(num_iters, float):
+        #     # Convert float to int
+        #     num_iters = int(num_iters)
+        # elif isinstance(num_iters, list):
+        #     # Get the first element from the list
+        #     num_iters = 1  # len(num_iters)
+        # elif not isinstance(num_iters, int):
+        #     # Anything else is invalid
+        #     num_iters = 1
 
         for _ in range(num_iters):
             # Execute the body
@@ -323,7 +328,8 @@ class Indexable:
             return array
 
         if isinstance(value, list):
-            array.extend(value)
+            # array.extend(value) # Causes crashes
+            return array
         else:
             array.append(value)
 
