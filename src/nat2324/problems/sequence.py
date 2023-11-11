@@ -110,6 +110,7 @@ class Sequence:
         xs = self.x_test if is_test else self.x_train
         ys = self.y_test if is_test else self.y_train
         fitnesses = []
+        tree.show()
 
         for x, y in zip(xs, ys):
             fitness = 0
@@ -126,30 +127,31 @@ class Sequence:
                 fitness += 0.05 * 1
 
             if len(y_pred) <= len(y):
-                fitness += 0.3 * self.loss_fn(
+                fitness += 0.2 * self.loss_fn(
                     np.array([len(y)]), np.array([len(y_pred)])
                 )
 
-            if len(y_pred) != len(y):
+            if len(y_pred) != len(y) or np.std(y_pred) < 1:
                 fitnesses.append(fitness)
                 continue
 
-            # print(
-            #     "Len loss",
-            #     len(y),
-            #     len(y_pred),
-            #     self.loss_fn(np.array([len(y)]), np.array([len(y_pred)])),
-            # )
+            # if len(y_pred)
+
+            fitness += 0.3 * self.loss_fn(
+                np.std(y, keepdims=True), np.std(y_pred, keepdims=True)
+            )
+
+            # if fitness < 0.3 + 0.5 * 0.3:
+            #     fitnesses.append(fitness)
+            #     continue
+
+            fitness += 0.4 * self.loss_fn(np.array(y), np.array(y_pred))
 
             # Truncate to the length of the shortest list
-            min_len = min(len(y_pred), len(y))
-            y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
-            y, y_remain = y[:min_len], y[min_len:]
-            remain = y_pred_remain + y_remain
-
-            # Calculate fitness
-            if len(y_pred) != 0:
-                fitness += 0.6 * self.loss_fn(np.array(y), np.array(y_pred))
+            # min_len = min(len(y_pred), len(y))
+            # y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
+            # y, y_remain = y[:min_len], y[min_len:]
+            # remain = y_pred_remain + y_remain
 
             # print("match loss", self.loss_fn(np.array(y), np.array(y_pred)))
 

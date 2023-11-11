@@ -159,13 +159,13 @@ class NonTerminal(Symbol):
     def is_valid(self, *args) -> bool:
         return True
 
-    def pre_validate(self, args: tuple[Any]) -> tuple[Any]:
+    def validate(self, args: tuple[Any]) -> tuple[Any]:
         # Can be Any, e.g., flow non-terminals accept any
         # Non-flow terminals accept only tuple[Terminal.TYPE]
         return args
 
-    def post_validate(self, arg: Terminal.TYPE) -> Terminal.TYPE:
-        return arg
+    # def post_validate(self, arg: Terminal.TYPE) -> Terminal.TYPE:
+    #     return arg
 
     # def __call__(self, *args) -> int | float:
     #     # Check for division by zero
@@ -184,20 +184,11 @@ class NonTerminal(Symbol):
     #     return self.function(*args)
 
     def __call__(self, *args, **kwargs) -> Terminal.TYPE:
-        yes = (
-            len(args) == 2
-            and isinstance(args[0], list)
-            and isinstance(args[1], list)
-            and len(args[0]) != len(args[1])
-        )
         # if yes:
         #     raise ValueError("Uneven")
         # print("raw", args)
-        args = self.pre_validate(args)
-        # print("val", args)
+        args = self.validate(args)
         result = self.function(*args, **kwargs)
-        result = self.post_validate(result)
-        # print("post", result)
 
         return result
 

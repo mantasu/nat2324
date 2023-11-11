@@ -89,14 +89,21 @@ class GeneticProgrammingAlgorithm(BaseRunner):
 
     def hoist(self, tree: GPTree) -> GPTree:
         # Select a random subtree
+        new_tree = self.rng.choice(tree.descendants)
+        new_tree.parent = None
+
+        tree = self.generate_individual(
+            max_depth=max(2, self.max_depth - new_tree.height)
+        )
         subtree = self.rng.choice(tree.descendants)
-        subtree.parent = None
 
-        # if subtree.parent.parent is not None:
-        #     # Replace the subtree's parent with the subtree
-        #     subtree.parent = subtree.parent.parent
+        children = tuple(
+            child if child != subtree else new_tree for child in subtree.parent.children
+        )
+        new_tree.parent, subtree.parent = subtree.parent, None
+        new_tree.parent.children = children
 
-        return subtree
+        return tree
 
     def shrink(self, tree: GPTree) -> GPTree:
         # Select a random subtree
@@ -119,15 +126,28 @@ class GeneticProgrammingAlgorithm(BaseRunner):
     def renew(self, tree: GPTree) -> GPTree:
         # Select a random subtree
         subtree = self.rng.choice(tree.descendants)
-        # Replace the subtree with a new randomly generated tree
-        max_depth = max(1, self.max_depth - subtree.height)
-        new_tree = self.generate_individual(max_depth=max_depth)
+
+        if subtree.name in self.terminals:
+            symbol = self.rng.choice(list(self.terminals))
+            new_node = GPTree(str(symbol), symbol)
+        else:
+            symbol = self.rng.choice(list(self.non_terminals))
+            new_node = GPTree(str(symbol), symbol)
+
+            for child in subtree.children[: symbol.arity]:
+                child.parent = new_node
+
+            while len(new_node.children) < symbol.arity:
+                terminal = self.rng.choice(list(self.terminals))
+                child_node = GPTree(str(terminal), terminal)
+                child_node.parent = new_node
 
         children = tuple(
-            child if child != subtree else new_tree for child in subtree.parent.children
+            child if child != subtree else new_node for child in subtree.parent.children
         )
-        new_tree.parent, subtree.parent = subtree.parent, None
-        new_tree.parent.children = children
+
+        new_node.parent, subtree.parent = subtree.parent, None
+        new_node.parent.children = children
 
         return tree
 
@@ -152,8 +172,10 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         mutation_type = self.mutation_type
 
         if mutation_type == "mixed":
-            mutation_type = self.rng.choice(["hoist", "shrink", "renew", "grow"])
-            # mutation_type = self.rng.choice(["shrink", "regen"])
+            mutation_type = self.rng.choice(
+                ["hoist", "shrink", "grow", "renew", "regen"]
+            )
+            mutation_type = self.rng.choice(["shrink", "renew", "regen"])
 
         if mutation_type == "hoist":
             return self.hoist(tree)
@@ -167,27 +189,8 @@ class GeneticProgrammingAlgorithm(BaseRunner):
             return self.generate_individual()
 
     def cross(self, parent1: GPTree, parent2: GPTree) -> tuple[GPTree, GPTree]:
-        # Select a random node from each parent
-        # print("HS before", parent1.height, parent2.height)
-
-        # Choose a random node from each parent (that is at least of height 2)
-        # node1 = self.rng.choice(self.rng.choice(parent1.children).descendants)
-        # node2 = self.rng.choice(self.rng.choice(parent2.children).descendants)
-
         node1 = self.rng.choice(parent1.descendants)
         node2 = self.rng.choice(parent2.descendants)
-
-        # print("Chosen", node1.name, node2.name)
-
-        # Check if node1 is an ancestor of node2 or vice versa
-        # if node1 in node2.ancestors or node2 in node1.ancestors:
-        #     raise ValueError(
-        #         "Cannot swap nodes that have an ancestor/descendant relationship"
-        #     )
-
-        # Swap the nodes
-        # node1_idx = node1.parent.children.index(node1)
-        # node2_idx = node2.parent.children.index(node2)
 
         # Create new children, however, note that swapped children still have references to their old parents
         children1 = tuple(
@@ -202,10 +205,26 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         node1.parent.children = children2
         node2.parent.children = children1
 
-        # print("HS after", parent1.height, parent2.height)
-
-        # return copy.deepcopy(parent1), copy.deepcopy(parent2)
         return parent1, parent2
+
+    def trim(self, tree: GPTree, curr_depth: int = 1) -> GPTree:
+        # Check if the current depth is greater than the maximum depth
+        if curr_depth > self.max_depth:
+            # Replace the tree with a random terminal
+            terminal = self.rng.choice(list(self.terminals))
+            terminal_node = GPTree(str(terminal), terminal)
+
+            children = tuple(
+                child if child != tree else terminal_node
+                for child in tree.parent.children
+            )
+            terminal.parent, tree.parent = tree.parent, None
+            terminal.parent.children = children
+        else:
+            # Iterate over each child
+            for child in tree.children:
+                # Trim the child
+                self.trim(child, curr_depth + 1)
 
     def crossover(self, population: list[GPTree]) -> list[GPTree]:
         # Perform crossover on each pair of individuals
@@ -230,9 +249,12 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         # Iterate over each individual in the population
         for i, individual in enumerate(population):
             # Check if the individual's height is within the specified range
-            if not self.min_depth <= individual.height <= self.max_depth:
+            if individual.height < self.min_depth:
                 # If not, replace the individual with a new one
                 population[i] = self.generate_individual()
+            if individual.height > self.max_depth:
+                # If not, replace the individual with a new one
+                self.trim(individual)
 
         return population
 

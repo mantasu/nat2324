@@ -48,15 +48,15 @@ class GPTree(Node):
             # Choose a non-terminal, generate children, and init node
             non_terminal = rng.choice(non_terms, p=[nt.p for nt in non_terms])
             children = [
-                cls.generate_tree(
+                cls(name="s", symbol=Terminal("s"))
+                if i == 0 and non_terminal.name in {"push", "get"}
+                else cls.generate_tree(
                     min_depth=min_depth - 1,
                     max_depth=max_depth - 1,
                     terminals=terminals,
                     non_terminals=non_terminals,
                     rng=rng,
                 )
-                if i != 0 and non_terminal.name not in {"push", "get"}
-                else cls(name="s", symbol=Terminal("s"))
                 for i in range(non_terminal.arity)
             ]
             node = cls(str(non_terminal), non_terminal, children=children)
@@ -64,6 +64,9 @@ class GPTree(Node):
         return node
 
     def compute(self, **kwargs):
+        if self.parent is None:
+            self.show()
+
         if isinstance(self.symbol, Terminal) and self.symbol.is_variable:
             res = kwargs[str(self.symbol)]
             return res

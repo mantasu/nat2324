@@ -4,7 +4,7 @@ from typing import Any, Callable
 import numpy as np
 from anytree import Node
 
-from .converter import numpify
+from .converter import as_list, as_scalar, numpify
 from .symbol import NonTerminal, Symbol, Terminal
 
 
@@ -35,6 +35,32 @@ class Arithmetic(NonTerminal):
 
     # def is_valid(self, *args) -> bool:
     #     return all(isinstance(arg, (int, float, bool, list)) for arg in args)
+
+    def validate(
+        self,
+        args: tuple[Terminal.TYPE],
+    ) -> tuple[int | float, int | float]:
+        if len(args) == 0:
+            # No arguments
+            args = (0, 0)
+        elif len(args) == 1:
+            # One argument
+            args = args * 2
+        elif len(args) > 2:
+            # > 2 arguments
+            args = args[:2]
+
+        # Convert to valid scalars
+        args = as_scalar(args)
+
+        if (self.name in {"/", "%"} and abs(args[1]) < 1e-9) or (
+            self.name == "pow" and args[1] > 100
+        ):
+            # Fix division and power
+            args[0] = np.inf
+            args[1] = 1
+
+        return args
 
     def pre_validate(
         self,
@@ -189,9 +215,11 @@ class Flow(NonTerminal):
         after: Callable[..., Terminal.TYPE],
         **kwargs,
     ) -> Terminal.TYPE:
-        before(**kwargs)
+        # Run before & after
+        _ = before(**kwargs)
+        a = after(**kwargs)
 
-        return after(**kwargs)
+        return a
 
     @staticmethod
     def if_else_clb(
@@ -212,30 +240,26 @@ class Flow(NonTerminal):
         body: Callable[..., Terminal.TYPE],
         **kwargs,
     ) -> Terminal.TYPE:
+        kwargs.setdefault("level", 1)
+
+        if kwargs["level"] > 1:
+            return body(**kwargs)
+        else:
+            kwargs["level"] += 1
+
         # Get the number of iterations
         num_iters = num_iters(**kwargs)
-        # print("My number", numpify(num_iters, default=1).tolist())
-        num_iters = numpify(num_iters, default=1).tolist()
-        # num_iters = 1 if len(num_iters) == 0 else num_iters[-1]
+        num_iters = as_scalar(num_iters, bounds=(0, 1000), type=int)
 
-        if len(num_iters) > 0 and isinstance(num_iters[-1], (float, int)):
-            num_iters = min(1000, max(1, int(num_iters[-1])))
-        else:
-            num_iters = 1
-
-        # if isinstance(num_iters, float):
-        #     # Convert float to int
-        #     num_iters = int(num_iters)
-        # elif isinstance(num_iters, list):
-        #     # Get the first element from the list
-        #     num_iters = 1  # len(num_iters)
-        # elif not isinstance(num_iters, int):
-        #     # Anything else is invalid
-        #     num_iters = 1
+        if num_iters == 0:
+            # Encourage correctness
+            return num_iters
 
         for _ in range(num_iters):
-            # Execute the body
+            # Repeat the execution
             result = body(**kwargs)
+
+        kwargs.pop("level")
 
         return result
 
@@ -258,34 +282,21 @@ class Indexable:
         array: list,
         index: int,
     ) -> Terminal.TYPE:
-        if not isinstance(array, list) or len(array) == 0:
-            # Array is not a list or is empty
-            return array
+        # print("GET ORI", array, index)
 
-        if not isinstance(index, (int, float, bool, list)) or (
-            (is_idx_list := isinstance(index, list)) and len(index) == 0
-        ):
-            # Index is not a number or is an empty list
-            return array
+        # Convert to proper types
+        array = as_list(array)
+        index = as_scalar(
+            index, default=-1, bounds=(-len(array), len(array) - 1), type=int
+        )
 
-        if not isinstance(index, list):
-            index = [index]
+        # print("GET NEW", array, index)
 
-        # Initialize the elements list
-        elements = []
+        if len(array) == 0:
+            # Empty array
+            return index
 
-        for i in index:
-            if i > 0 and i >= len(array):
-                # Index is out of bounds (too big)
-                i = -1
-            elif i < 0 and abs(i) > len(array):
-                # Index is out of bounds (too low)
-                i = 0
-
-            # Get the element from the array at the given index
-            elements.append(array[int(i)])
-
-        return elements if is_idx_list else elements[0]
+        return array[index]
 
     @staticmethod
     def set_clb(
@@ -324,14 +335,16 @@ class Indexable:
         array: list,
         value: Terminal.TYPE,
     ) -> list:
-        if not isinstance(array, list):
+        # Convert to proper types
+        array = as_list(array, default=None)
+        value = as_scalar(value, default=None)
+
+        if array is None or value is None:
+            # Not a list
             return array
 
-        if isinstance(value, list):
-            # array.extend(value) # Causes crashes
-            return array
-        else:
-            array.append(value)
+        # Append the value
+        array.append(value)
 
         return array
 
