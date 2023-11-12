@@ -57,8 +57,10 @@ class Arithmetic(NonTerminal):
             self.name == "pow" and args[1] > 100
         ):
             # Fix division and power
-            args[0] = np.inf
-            args[1] = 1
+            # args[0] = np.inf
+            # args[1] = 1
+
+            args = (0, 1)
 
         return args
 
@@ -286,9 +288,7 @@ class Indexable:
 
         # Convert to proper types
         array = as_list(array)
-        index = as_scalar(
-            index, default=-1, bounds=(-len(array), len(array) - 1), type=int
-        )
+        index = as_scalar(index, bounds=(-len(array), len(array) - 1), type=int)
 
         # print("GET NEW", array, index)
 

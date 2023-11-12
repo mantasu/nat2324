@@ -6,6 +6,13 @@ from ..utils import Loss
 
 
 class Sequence:
+    START = {
+        "fibonacci": [0, 1],
+        "tribonacci": [0, 1, 1],
+        "pell": [0, 1],
+        "arithmetic_geometric": [0, 1],
+    }
+
     def __init__(
         self,
         sequence_type: str = "fibonacci",
@@ -16,6 +23,8 @@ class Sequence:
         seed: int | None = None,
     ):
         self.sequence = getattr(self, sequence_type)
+        self.start = self.START[sequence_type].copy()
+
         self.loss_fn = Loss(loss_type, is_inverse=True)
         self.rng = np.random.default_rng(seed=seed)
 
@@ -90,15 +99,61 @@ class Sequence:
 
     @staticmethod
     def fibonacci(n: int) -> list[int]:
-        if n == 1:
-            return [0]
-        elif n == 2:
-            return [0, 1]
+        # Initialize starting sequence of fibonacci
+        series = Sequence.START["fibonacci"].copy()
 
-        series = [0, 1]
+        if n <= len(series):
+            # Series is short
+            return series[:n]
 
-        for _ in range(2, n):
+        for _ in range(len(series), n):
+            # Append the sum of the last two numbers
             series.append(series[-1] + series[-2])
+
+        return series
+
+    @staticmethod
+    def tribonacci(n: int) -> list[int]:
+        # Initialize starting sequence of tribonacci
+        series = Sequence.START["tribonacci"].copy()
+
+        if n <= len(series):
+            # Series is short
+            return series[:n]
+
+        for _ in range(len(series), n):
+            # Append the sum of the last three numbers
+            series.append(series[-1] + series[-2] + series[-3])
+
+        return series
+
+    @staticmethod
+    def pell(n: int) -> list[int]:
+        # Initialize starting sequence of pell
+        series = Sequence.START["pell"].copy()
+
+        if n <= len(series):
+            # Series is short
+            return series[:n]
+
+        for _ in range(len(series), n):
+            # Sum of last two numbers (multiply first)
+            series.append(2 * series[-1] + series[-2])
+
+        return series
+
+    @staticmethod
+    def arithmetic_geometric(n: int) -> list[float]:
+        # Initialize starting sequence of arithmetic_geometric
+        series = Sequence.START["arithmetic_geometric"].copy()
+
+        if n <= len(series):
+            # Series is short
+            return series[:n]
+
+        for _ in range(len(series), n):
+            # Append the sum of the last two multiplied numbers
+            series.append(2 * series[-1] + 0.5 * series[-2])
 
         return series
 
@@ -119,7 +174,7 @@ class Sequence:
             # Predict sequence TODO: fix this (s should be automatic)
 
             # print("Waiting...")
-            y_pred = tree(x=x, s=[0, 1])
+            y_pred = tree(x=x - len(self.start), s=self.start.copy())
             # print(y, y_pred)
             # print("Wit end")
 
@@ -158,37 +213,28 @@ class Sequence:
 
             # Truncate to the length of the shortest list
             min_len = min(len(y_pred), len(y))
-            y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
-            y, y_remain = y[:min_len], y[min_len:]
-            remain = y_pred_remain + y_remain
 
-            fitness += 0.25 * self.loss_fn(np.array(y), np.array(y_pred))
-            # print("corr", 0.3 * self.loss_fn(np.array(y), np.array(y_pred)))
+            # y_pred_left, y_left = y_pred[:min_len], y[:min_len]
+            # y_pred_right, y_right = y_pred[-min_len:], y[-min_len:]
 
-            if len(remain) != 0:
-                # fitness += 0.2 * self.loss_fn(
-                #     np.array([len(remain)]), np.array([0])
-                # )
-                fitness += 0.25 * self.loss_fn(np.array(remain), np.zeros_like(remain))
-                # print(
-                #     "non-match loss",
-                #     0.3 * self.loss_fn(np.array(remain), np.zeros_like(remain)),
-                # )
-            else:
-                fitness += 0.25 * 1
-                # print("non-match loss", 0.3 * 1)
+            fitness += 0.5 * self.loss_fn(
+                np.array(y[:min_len] + y[-min_len:]),
+                np.array(y_pred[:min_len] + y_pred[-min_len:]),
+            )
+
+            # y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
+            # y, y_remain = y[:min_len], y[min_len:]
+            # remain = y_pred_remain + y_remain
+
+            # fitness += 0.25 * self.loss_fn(np.array(y), np.array(y_pred))
+
+            # if len(remain) != 0:
+            #     fitness += 0.25 * self.loss_fn(np.array(remain), np.zeros_like(remain))
+            # else:
+            #     fitness += 0.25 * 1
 
             # Encourages to find correct output structure but also if some components are good, they may also earn some fitness
 
-            #     # print(
-            #     #     "non-match loss",
-            #     #     self.loss_fn(np.array(remain), np.zeros_like(remain)),
-            #     # )
-
             fitnesses.append(fitness)
-
-        # print("Ultra wait end")
-
-        # print(np.mean(fitnesses))
 
         return np.mean(fitnesses)
