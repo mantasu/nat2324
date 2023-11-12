@@ -110,59 +110,84 @@ class Sequence:
         xs = self.x_test if is_test else self.x_train
         ys = self.y_test if is_test else self.y_train
         fitnesses = []
-        tree.show()
+        # tree.show()
+
+        # print("Ultra wait")
 
         for x, y in zip(xs, ys):
             fitness = 0
             # Predict sequence TODO: fix this (s should be automatic)
-            y_pred = tree(x=x - 2, s=[0, 1])
+
+            # print("Waiting...")
+            y_pred = tree(x=x, s=[0, 1])
+            # print(y, y_pred)
+            # print("Wit end")
 
             if not isinstance(y_pred, Collection):
+                # print("Ultra wait end")
                 return 0
 
-            if isinstance(y_pred, Collection):
-                fitness += 0.05 * 1
-
-            if len(y_pred) > 1:
-                fitness += 0.05 * 1
-
-            if len(y_pred) <= len(y):
-                fitness += 0.2 * self.loss_fn(
-                    np.array([len(y)]), np.array([len(y_pred)])
-                )
-
-            if len(y_pred) != len(y) or np.std(y_pred) < 1:
+            if len(y_pred) == 0:
                 fitnesses.append(fitness)
                 continue
 
-            # if len(y_pred)
+            # if len(y_pred) <= len(y):
 
-            fitness += 0.3 * self.loss_fn(
-                np.std(y, keepdims=True), np.std(y_pred, keepdims=True)
+            len_fitness = self.loss_fn(np.array([len(y)]), np.array([len(y_pred)]))
+
+            fitness += 0.25 * len_fitness
+            # print("len", len_fitness)
+
+            # std_fitness = self.loss_fn(
+            #     np.std(y, keepdims=True), np.std(y_pred, keepdims=True)
+            # )
+            std_fitness = self.loss_fn(
+                np.array([len(set(y))]), np.array([len(set(y_pred))])
             )
+            fitness += 0.25 * std_fitness
 
-            # if fitness < 0.3 + 0.5 * 0.3:
+            # print("std", std_fitness)
+
+            # if std_fitness < 0.5 or len_fitness < 0.5:
             #     fitnesses.append(fitness)
             #     continue
 
-            fitness += 0.4 * self.loss_fn(np.array(y), np.array(y_pred))
+            # if std_fitness < 0.2:
+            #     fitnesses.append(fitness)
+            #     continue
 
             # Truncate to the length of the shortest list
-            # min_len = min(len(y_pred), len(y))
-            # y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
-            # y, y_remain = y[:min_len], y[min_len:]
-            # remain = y_pred_remain + y_remain
+            min_len = min(len(y_pred), len(y))
+            y_pred, y_pred_remain = y_pred[:min_len], y_pred[min_len:]
+            y, y_remain = y[:min_len], y[min_len:]
+            remain = y_pred_remain + y_remain
 
-            # print("match loss", self.loss_fn(np.array(y), np.array(y_pred)))
+            fitness += 0.25 * self.loss_fn(np.array(y), np.array(y_pred))
+            # print("corr", 0.3 * self.loss_fn(np.array(y), np.array(y_pred)))
 
-            # if len(remain) != 0:
-            #     fitness += 0.2 * self.loss_fn(np.array(remain), np.zeros_like(remain))
+            if len(remain) != 0:
+                # fitness += 0.2 * self.loss_fn(
+                #     np.array([len(remain)]), np.array([0])
+                # )
+                fitness += 0.25 * self.loss_fn(np.array(remain), np.zeros_like(remain))
+                # print(
+                #     "non-match loss",
+                #     0.3 * self.loss_fn(np.array(remain), np.zeros_like(remain)),
+                # )
+            else:
+                fitness += 0.25 * 1
+                # print("non-match loss", 0.3 * 1)
+
+            # Encourages to find correct output structure but also if some components are good, they may also earn some fitness
+
             #     # print(
             #     #     "non-match loss",
             #     #     self.loss_fn(np.array(remain), np.zeros_like(remain)),
             #     # )
 
             fitnesses.append(fitness)
+
+        # print("Ultra wait end")
 
         # print(np.mean(fitnesses))
 

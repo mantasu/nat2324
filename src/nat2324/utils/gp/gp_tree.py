@@ -48,9 +48,10 @@ class GPTree(Node):
             # Choose a non-terminal, generate children, and init node
             non_terminal = rng.choice(non_terms, p=[nt.p for nt in non_terms])
             children = [
-                cls(name="s", symbol=Terminal("s"))
-                if i == 0 and non_terminal.name in {"push", "get"}
-                else cls.generate_tree(
+                # cls(name="s", symbol=Terminal("s"))
+                # if i == 0 and non_terminal.name in {"push", "get"}
+                # else
+                cls.generate_tree(
                     min_depth=min_depth - 1,
                     max_depth=max_depth - 1,
                     terminals=terminals,
@@ -64,8 +65,9 @@ class GPTree(Node):
         return node
 
     def compute(self, **kwargs):
-        if self.parent is None:
-            self.show()
+        # if self.parent is None:
+        #     self.show()
+        #     print("Executing...")
 
         if isinstance(self.symbol, Terminal) and self.symbol.is_variable:
             res = kwargs[str(self.symbol)]
@@ -76,10 +78,14 @@ class GPTree(Node):
         elif isinstance(self.symbol, NonTerminal) and self.symbol.is_flow:
             res = self.symbol(*self.children, **kwargs)
 
-            return res
+            # return res
         elif isinstance(self.symbol, NonTerminal):
             res = self.symbol(*[child(**kwargs) for child in self.children])
-            return res
+
+        # if self.parent is None:
+        #     print("Done.")
+
+        return res
 
     def show(self):
         for pre, _, node in RenderTree(self):
@@ -87,6 +93,8 @@ class GPTree(Node):
             print("%s%s" % (pre, node.name))
 
     def __call__(self, **kwargs) -> list[float | int | bool]:
+        return self.compute(**kwargs)
+
         keys = list(kwargs.keys())
 
         # self.show()

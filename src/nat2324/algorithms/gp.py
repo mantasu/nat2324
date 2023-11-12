@@ -70,14 +70,20 @@ class GeneticProgrammingAlgorithm(BaseRunner):
             new population and its corresponding fitness scores.
         """
         # Select parents, perform crossover and mutation
+        # print("SEL", len(population))
         parents = self.tournament_selection(population, fitness)
+        # print("CROSS", len(population))
         children = self.crossover(parents)
+        # print("MUTA", len(population))
         population = self.mutation(children)
+        # print("VALI", len(population))
         population = self.validation(population)
 
         # Compute fitness for each individual (parallelize if large N)
 
+        # print("EV", len(population))
         fitness = self.evaluate(population)
+        # print("EV Done")
 
         # (
         #     self.parallel_apply(self.fitness_fn, population)
@@ -175,7 +181,7 @@ class GeneticProgrammingAlgorithm(BaseRunner):
             mutation_type = self.rng.choice(
                 ["hoist", "shrink", "grow", "renew", "regen"]
             )
-            mutation_type = self.rng.choice(["shrink", "renew", "regen"])
+            # mutation_type = self.rng.choice(["shrink", "renew", "regen"])
 
         if mutation_type == "hoist":
             return self.hoist(tree)
@@ -205,6 +211,7 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         node1.parent.children = children2
         node2.parent.children = children1
 
+        # return copy.deepcopy(parent1), copy.deepcopy(parent2)
         return parent1, parent2
 
     def trim(self, tree: GPTree, curr_depth: int = 1) -> GPTree:
@@ -249,12 +256,22 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         # Iterate over each individual in the population
         for i, individual in enumerate(population):
             # Check if the individual's height is within the specified range
+            if individual.height > self.max_depth:
+                # If not, replace the individual with a new one (could do while but it's slow)
+                individual = self.rng.choice(individual.descendants)
+                population[i] = individual
+                individual.parent = None
+                # individual = individual.descendants[0]
+                # individual.parent = None
+
             if individual.height < self.min_depth:
                 # If not, replace the individual with a new one
                 population[i] = self.generate_individual()
-            if individual.height > self.max_depth:
-                # If not, replace the individual with a new one
-                self.trim(individual)
+
+            # population[i] = individual
+
+            # population[i] = self.trim(individual)
+            # population[i] = self.generate_individual()
 
         return population
 
@@ -273,12 +290,32 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         population: list[GPTree],
         fitness: np.ndarray,
     ) -> list[GPTree]:
+        # print("\tNumpys")
         # Population size
         N = len(population)
         population = np.array(population)
 
+        # print("\tSELEMAS")
+
         # Select random groups and determine the best individuals
         idx = self.rng.integers(N, size=(N, self.tournament_size))
+        # print(idx.shape, idx)
         population = population[idx][range(N), np.argmax(fitness[idx], 1)]
+        # print(fitness[idx].shape)
+        # print(np.argmax(fitness[idx], 1).shape, np.argmax(fitness[idx], 1))
 
-        return [copy.deepcopy(ind) for ind in population]
+        # print("\tCOPIES")
+        num = 0
+        pop_set = set()
+        # pop = [ind if copy.deepcopy(ind) for ind in population]
+
+        for i, ind in enumerate(population):
+            if ind in pop_set:
+                num += 1
+                population[i] = copy.deepcopy(ind)
+            else:
+                pop_set.add(ind)
+
+        # print("\tCOPIES", num)
+
+        return population

@@ -188,6 +188,7 @@ class NonTerminal(Symbol):
         #     raise ValueError("Uneven")
         # print("raw", args)
         args = self.validate(args)
+        # print("valid", args)
         result = self.function(*args, **kwargs)
 
         return result
