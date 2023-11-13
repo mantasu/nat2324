@@ -1,8 +1,11 @@
+from typing import Collection
+
 import numpy as np
+
 
 class Loss:
     """Loss utility class for computing (inverse) loss functions.
-    
+
     Utility class for calculating various types of loss functions. It
     provides several static methods, each corresponding to a different
     type of loss function:
@@ -23,7 +26,7 @@ class Loss:
           between the true and predicted values.
         * ``smape``: Symmetric Mean Absolute Percentage Error (SMAPE), a
           variation of MAPE that corrects its behavior near zero.
-    
+
     The class can be called directly to calculate the loss of a given
     true and predicted values. Example:
 
@@ -32,7 +35,7 @@ class Loss:
         >>> loss = Loss("mae")
         >>> loss(y_true, y_pred)
         0.0
-    
+
     Args:
         loss_type (str): The type of loss function to use. It must be
             one of the following: "mae", "mse", "rmse", "r2", "mape", or
@@ -40,6 +43,7 @@ class Loss:
         is_inverse (bool, optional): Whether to invert the loss value.
             Defaults to ``False``.
     """
+
     def __init__(self, loss_type: str, is_inverse: bool = False):
         self.loss_type = loss_type
         self.is_inverse = is_inverse
@@ -52,11 +56,11 @@ class Loss:
         differences between the true and predicted values:
 
             MAE = (1/n) * Σ|y_true - y_pred|
-        
+
         Args:
             y_true (numpy.ndarray): The ground truth values.
             y_pred (numpy.ndarray): The predicted values.
-        
+
         Returns:
             float: The calculated MAE.
         """
@@ -68,17 +72,17 @@ class Loss:
 
         The Mean Squared Error (MSE) is the average of the squared
         differences between the true and predicted values:
-        
+
             MSE = (1/n) * Σ(y_true - y_pred)^2
-        
+
         Args:
             y_true (numpy.ndarray): The ground truth values.
             y_pred (numpy.ndarray): The predicted values.
-        
+
         Returns:
             float: The calculated MSE.
         """
-        return np.mean((y_true - y_pred)**2)
+        return np.mean((y_true - y_pred) ** 2)
 
     @staticmethod
     def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -89,15 +93,15 @@ class Loss:
         predicted values.
 
             RMSE = sqrt((1/n) * Σ(y_true - y_pred)^2)
-        
+
         Args:
             y_true (numpy.ndarray): The ground truth values.
             y_pred (numpy.ndarray): The predicted values.
-        
+
         Returns:
             float: The calculated RMSE.
         """
-        return np.sqrt(np.mean((y_true - y_pred)**2))
+        return np.sqrt(np.mean((y_true - y_pred) ** 2))
 
     @staticmethod
     def r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -109,16 +113,17 @@ class Loss:
         independent variable or variables:
 
             R^2 = 1 - Σ(y_true - y_pred)^2 / Σ(y_true - mean(y_true))^2
-        
+
         Args:
             y_true (numpy.ndarray): The ground truth values.
             y_pred (numpy.ndarray): The predicted values.
-        
+
         Returns:
             float: The calculated R^2.
         """
-        return 1 - np.sum((y_true - y_pred)**2) \
-               / np.sum((y_true - np.mean(y_true))**2)
+        return 1 - np.sum((y_true - y_pred) ** 2) / np.sum(
+            (y_true - np.mean(y_true)) ** 2
+        )
 
     @staticmethod
     def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -129,11 +134,11 @@ class Loss:
         values:
 
             MAPE = (100/n) * Σ|((y_true - y_pred) / y_true)|
-        
+
         Args:
             y_true (numpy.ndarray): The ground truth values.
             y_pred (numpy.ndarray): The predicted values.
-        
+
         Returns:
             float: The calculated MAPE.
         """
@@ -149,7 +154,7 @@ class Loss:
         true and predicted values, adjusted for scale.
 
         SMAPE = 100/n * Σ 2 * |y_true - y_pred| / (|y_true| + |y_pred|)
-         
+
         Args:
             y_true (numpy.ndarray): The ground truth values.
             y_pred (numpy.ndarray): The predicted values.
@@ -157,15 +162,21 @@ class Loss:
         Returns:
             float: The calculated SMAPE.
         """
-        return 100 / len(y_true) * np.sum(2 * \
-            np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
+        return (
+            100
+            / len(y_true)
+            * np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
+        )
 
-    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def __call__(self, y_true: Collection, y_pred: Collection) -> float:
+        # Convert collections, e.g., lists, to numpy arrays
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+
         # Get the corresponding loss function (based on type)
         loss = getattr(self, self.loss_type)(y_true, y_pred)
-        
+
         if self.is_inverse:
             # Invert if needed
             loss = 1 / (1 + loss)
-        
+
         return loss
