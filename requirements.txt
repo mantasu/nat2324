@@ -1,6 +1,6 @@
 numpy
-networkx
 scipy
 matplotlib
 anytree
+graphviz
 ipykernel

@@ -53,13 +53,14 @@ class Arithmetic(NonTerminal):
         # Convert to valid scalars
         args = as_scalar(args)
 
+        if args[0] > 10e12 or args[1] > 10e12:
+            # Encourage correctness
+            args = (0, 0)
+
         if (self.name in {"/", "%"} and abs(args[1]) < 1e-9) or (
             self.name == "pow" and args[1] > 100
         ):
             # Fix division and power
-            # args[0] = np.inf
-            # args[1] = 1
-
             args = (0, 1)
 
         return args

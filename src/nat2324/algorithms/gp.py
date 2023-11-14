@@ -14,12 +14,12 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         fitness_fn: Callable[..., float],
         terminals: set[Terminal],
         non_terminals: set[NonTerminal],
-        N: int = 50000,
+        N: int = 1000,
         min_depth: int = 2,
-        max_depth: int = 7,
+        max_depth: int = 6,
         p_c: float = 0.7,
         p_m: float = 0.5,
-        tournament_size: int = 3,
+        tournament_size: int = 20,
         parallelize_fitness: bool = False,
         seed: int | None = None,
     ):
@@ -179,7 +179,8 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         population = population[idx][range(N), np.argmax(fitness[idx], 1)]
 
         # Make a copies of individuals (this is very expensive)
-        population = [copy.deepcopy(ind) for ind in population]
+        # population = [copy.deepcopy(ind) for ind in population]
+        population = [ind.copy() for ind in population]
 
         return population
 

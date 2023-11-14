@@ -18,6 +18,12 @@ Problem 3 generality:
 explain that using terminals of only integers/variables. We have background information and thus working with real numbers would only approach the solution, but may not solve it completely
 imposed terminal/non-terminal constraints ()
 
+## Setup
+
+```bash
+sudo apt-get install graphviz
+```
+
 ## Disclaimer
 
 ### Reverse ranges

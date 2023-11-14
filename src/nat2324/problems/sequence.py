@@ -28,6 +28,8 @@ class Sequence:
         self.loss_fn = Loss(loss_type, is_inverse=True)
         self.rng = np.random.default_rng(seed=seed)
 
+        self.name = f"Sequence({sequence_type}, {loss_type})"
+
         xs = self.rng.choice(range(*sample_range), num_samples, replace=False)
         ys = [self.sequence(x) for x in xs]
 
@@ -130,3 +132,13 @@ class Sequence:
             fitnesses.append(fitness)
 
         return np.mean(fitnesses)
+
+    def __call__(
+        self,
+        tree: Callable[..., Collection[float]],
+        is_test: bool = False,
+    ) -> float:
+        return self.evaluate(tree=tree, is_test=is_test)
+
+    def __repr__(self) -> str:
+        return self.name

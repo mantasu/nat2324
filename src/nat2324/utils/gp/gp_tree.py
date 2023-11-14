@@ -1,6 +1,6 @@
 import numpy as np
 from anytree import Node, RenderTree
-from anytree.exporter import DotExporter
+from anytree.exporter import UniqueDotExporter
 
 from .symbol import NonTerminal, Terminal
 
@@ -20,7 +20,7 @@ class GPTree(Node):
         cls,
         terminals: set[Terminal],
         non_terminals: set[NonTerminal],
-        min_depth: int = 2,
+        min_depth: int = 3,
         max_depth: int = 5,
         rng: np.random.Generator | None = None,
     ) -> "GPTree":
@@ -52,6 +52,13 @@ class GPTree(Node):
 
         return node
 
+    def copy(self) -> "GPTree":
+        return GPTree(
+            name=self.name,
+            symbol=self.symbol,
+            children=[child.copy() for child in self.children],
+        )
+
     def compute(self, **kwargs) -> Terminal.TYPE:
         if isinstance(self.symbol, Terminal) and self.symbol.is_variable:
             return kwargs[str(self.symbol)]
@@ -69,7 +76,7 @@ class GPTree(Node):
 
     def export(self, filepath: str):
         # Export tree as image using Graphviz
-        DotExporter(self).to_picture(filepath)
+        UniqueDotExporter(self).to_picture(filepath)
 
     def __call__(self, **kwargs) -> Terminal.TYPE:
         return self.compute(**kwargs)
