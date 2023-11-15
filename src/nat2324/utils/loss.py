@@ -121,9 +121,10 @@ class Loss:
         Returns:
             float: The calculated R^2.
         """
-        return 1 - np.sum((y_true - y_pred) ** 2) / np.sum(
-            (y_true - np.mean(y_true)) ** 2
-        )
+        denom = np.sum((y_true - np.mean(y_true)) ** 2)
+        denom = denom if denom != 0 else 1e-8
+
+        return np.sum((y_true - y_pred) ** 2) / denom
 
     @staticmethod
     def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:

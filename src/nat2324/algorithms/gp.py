@@ -229,6 +229,7 @@ class GeneticProgrammingAlgorithm(BaseRunner):
             "grow_up",
             "grow_down",
             "shrink",
+            "skip",
             "hoist",
             "renew",
             "regen",
@@ -249,6 +250,9 @@ class GeneticProgrammingAlgorithm(BaseRunner):
                     case "shrink":
                         # Shrink a random subtree to a terminal
                         population[i] = self.shrink(individual)
+                    case "skip":
+                        # Replace a parent with its random child
+                        population[i] = self.skip(individual)
                     case "hoist":
                         # Hoist a random subtree to the root
                         population[i] = self.hoist(individual)
@@ -328,6 +332,20 @@ class GeneticProgrammingAlgorithm(BaseRunner):
 
         # Replace the subtree with a terminal node
         self.swap_nodes(subtree, terminal_node)
+
+        return tree
+
+    def skip(self, tree: GPTree) -> GPTree:
+        # Select a random subtree and a random terminal
+        subtree = self.rng.choice(tree.descendants)
+        skip_node, subtree.parent = subtree.parent, None
+        skip_node.children = []
+
+        if skip_node.parent is None:
+            return subtree
+
+        # Assign subtree in place of its parent (skip node)
+        self.swap_nodes(subtree, skip_node)
 
         return tree
 
