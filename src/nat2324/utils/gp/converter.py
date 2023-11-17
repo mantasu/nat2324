@@ -59,8 +59,6 @@ def numpify(
     min_len = np.inf
     valid_args = []
 
-    # print("My args", args)
-
     for arg in args:
         # Convert to regular type (to normalize, e.g., int vs np.int64)
         arg = arg.tolist() if isinstance(arg, (np.ndarray, np.generic)) else arg
@@ -80,8 +78,6 @@ def numpify(
         else:
             # Leave the argument as it is (convert maybe to bool)
             valid_args.append(bool(arg) if as_bool else arg)
-
-    # print(min_len, valid_args)
 
     if min_len < np.inf:
         for i, arg in enumerate(valid_args):

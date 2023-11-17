@@ -2,37 +2,31 @@
 
 ## About
 
+Natural Computing assignment for academic year 2023/2024. The source code mainly contains classes and functions that model certain algorithms and problems. Notebooks focus on experiments with those algorithms and problems. In particular see:
 
-## Problem 1
+* [problem1.ipynb](notebooks/problem1.ipynb): experiments for answering question 1 about particle cooperation
+* [problem2.ipynb](notebooks/problem2.ipynb): experiments for answering question 2 about GA and Sumplete
+* [problem3.ipynb](notebooks/problem3.ipynb): experiments for answering question 3 about GP and sequence generation
 
-However, if we fix the number of generations rather than fitness evaluations, then we can expect the results to be better as more particles are searching for the global optimum, meaning there is a bigger likelihood one of them will hit it.
+The experiment result files are not provided, however, they can all be reproduced by rerunning the cells (some may take several hours to run). There is actually no need to run the notebooks since the outputs are left displayed.
 
-## Problem 2
+> Documentation is only written for the major classes
 
-If we have 3x3, we have in total 512 possibilities, meaning it's possible to just find a solution with brute force, which is essentially what the algorithm is doing as it acquires no knowledge of the problem as the time-steps pass.
+## Requirements
 
-## Problem 3
-
-Problem 3 generality:
-
-explain that using terminals of only integers/variables. We have background information and thus working with real numbers would only approach the solution, but may not solve it completely
-imposed terminal/non-terminal constraints ()
-
-## Setup
+Please use at least _Python 3.10_. For rendering graphs for **Genetic Programming** question, please install [Graphviz](https://graphviz.org/). For example, if you're using _Ubuntu_:
 
 ```bash
 sudo apt-get install graphviz
 ```
 
+There are some package requirements as well. PLease install them as follows:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Disclaimer
-
-### Reverse ranges
-
-In the experiments where `num_evaluations` instead of `max_generations` is used, the range of the population size is reversed, i.e., instead of $\{1, ..., N\}$, we have $\{N, ..., 1\}$ (of course, when plotting, this makes no difference because values are ordered by default).
-
-This is because the experiments are parallelized and the progress bar is updated in the sequence the processes have started, meaning if the first process takes very long to run the experiment and the other ones take very little time to ron other experiments, the progress bar will still only update after the first process finishes, and it will update to `100%` immediately since there would be no other processes to wait. So thus we reverse to see the updates of the progress bar more frequently because it is the case that the first experiments run much longer than the last ones (see below why). This can be considered as an issue with `tqdm` package, specifically, `process_map` method.
-
-Regardless of how many individuals there are (unless $N$ is very large), it is much faster evolve less generations with more individuals than to evolve more generations with less individuals. This is because at each iteration of `evolve`, all the functions are vectorized using `numpy` which uses `C++` under the hood. Now if we run many generations with few individuals, this will be slow because running many _Python_ loops is very slow.
 
 ### Rerunning previous cells
 
@@ -75,3 +69,5 @@ Some of the algorithm implementations (particularly in **problem 1**) took inspi
 * **Differential Evolution**: https://medium.com/@reshma_shaji/differential-evolution-what-it-is-and-how-does-it-work-81d3415c2367
 * **Cuckoo Search**: https://github.com/ujjwalkhandelwal/cso_cuckoo_search_optimization/blob/main/cso/cso.py and https://medium.com/@evertongomede/cuckoo-search-algorithm-mimicking-nature-for-optimization-2fea1b96c82b
 * **Bat Algorithm**: https://medium.com/it-paragon/bat-algorithm-bad-algorithm-b26ae42da8e1
+
+Other algorithm implementations were either covered in lectures or inspiration was taken from tutorials.

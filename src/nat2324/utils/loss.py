@@ -112,7 +112,7 @@ class Loss:
         variance for a dependent variable that's explained by an
         independent variable or variables:
 
-            R^2 = 1 - Σ(y_true - y_pred)^2 / Σ(y_true - mean(y_true))^2
+            R^2 = Σ(y_true - y_pred)^2 / Σ(y_true - mean(y_true))^2
 
         Args:
             y_true (numpy.ndarray): The ground truth values.

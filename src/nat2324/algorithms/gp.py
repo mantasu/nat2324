@@ -1,14 +1,50 @@
-import copy
 from typing import Callable
 
 import numpy as np
 
 from ..utils import GPTree, NonTerminal, Terminal
-from ..utils.decorators import override, utilmethod
+from ..utils.decorators import override, submethod, utilmethod
 from .base_runner import BaseRunner
 
 
 class GeneticProgrammingAlgorithm(BaseRunner):
+    """Genetic Programming Algorithm
+
+    This class implements the Genetic Programming (GP) algorithm. It
+    uses tournament selection, crossover, mutation, and validation to
+    evolve a population of genetic programs represented as trees.
+
+    Args:
+        fitness_fn (Callable[..., float]): The fitness function to be
+            used to evaluate the individuals in the population. It must
+            take a single argument that is a genetic program tree and
+            return a single value that is the fitness score of the tree.
+        terminals (set[Terminal]): The set of terminals to be used to
+            generate the genetic program trees.
+        non_terminals (set[NonTerminal]): The set of non-terminals to be
+            used to generate the genetic program trees.
+        N (int, optional): The population size. Defaults to 1000.
+        min_depth (int, optional): The minimum depth of the tree.
+            Defaults to 2.
+        max_depth (int, optional): The maximum depth of the tree.
+            Defaults to 6.
+        p_c (float, optional): The crossover probability (fraction of
+            pairs to be selected for mating). Defaults to 0.7.
+        p_m (float, optional): The mutation probability (fraction of
+            individuals to be selected for mutation). Defaults to 0.5.
+        tournament_size (int, optional): The number of individuals to
+            sample for each group during the tournament selection
+            process. Defaults to 20.
+        parallelize_fitness (bool, optional): Whether to parallelize the
+            computation of the fitness scores for each individual.
+            Defaults to ``False``, which should be set if the fitness
+            function is not that complex, in which case running on a
+            single process would be more efficient.
+        seed (int | None, optional): The seed for the random number
+            generator. Defaults to ``None``, which means on every run,
+            the results will be random.
+    """
+
     def __init__(
         self,
         fitness_fn: Callable[..., float],
@@ -105,6 +141,178 @@ class GeneticProgrammingAlgorithm(BaseRunner):
             node2.parent.children = kids1
 
         return node1, node2
+
+    @submethod
+    def grow_up(self, tree: GPTree) -> GPTree:
+        """Grows a random ancestor subtree from a random node.
+
+        This function grows a random ancestor subtree from a random node
+        of the given tree. The subtree is grown up from the selected
+        node.
+
+        Args:
+            tree (GPTree): The tree that contains a node to grow a
+                random ancestor subtree from.
+
+        Returns:
+            GPTree: A new random tree that has a subtree from the
+            original tree as its descendant.
+        """
+        # Select a random subtree to grow up from
+        subtree = self.rng.choice(tree.descendants)
+
+        # Generate an ancestor subtree to attach on top of subtree
+        max_depth = max(2, self.max_depth - subtree.height)
+        ancestor = self.generate_individual(max_depth=max_depth)
+
+        # Select a random ancestor-descendant node to swap out
+        descendent = self.rng.choice(ancestor.descendants)
+        self.swap_nodes(subtree, descendent)
+
+        return ancestor
+
+    @submethod
+    def grow_down(self, tree: GPTree) -> GPTree:
+        """Grows a random descendant subtree from a random node.
+
+        This function grows a random descendant subtree from a random
+        node of the given tree. The subtree is grown down from the
+        selected node.
+
+        Args:
+            tree (GPTree): The tree that contains a node to grow a
+                random descendant subtree from.
+
+        Returns:
+            GPTree: The tree that has a random node replaced with a
+            new random subtree.
+        """
+        # Select a random subtree to grow down from
+        subtree = self.rng.choice(tree.descendants)
+
+        # Generate a descendant and attach it instead of the subtree
+        max_depth = max(1, self.max_depth - (tree.height - subtree.height))
+        descendant = self.generate_individual(max_depth=max_depth)
+        self.swap_nodes(subtree, descendant)
+
+        return tree
+
+    @submethod
+    def shrink(self, tree: GPTree) -> GPTree:
+        """Shrinks a random subtree to a random terminal.
+
+        This function shrinks a random subtree of the given tree to a
+        random terminal. The subtree is replaced with a terminal node.
+
+        Args:
+            tree (GPTree): The tree that contains a node to shrink to a
+                random terminal.
+
+        Returns:
+            GPTree: The tree that has a random subtree replaced with a
+            random terminal.
+        """
+        # Select a random subtree and a random terminal
+        subtree = self.rng.choice(tree.descendants)
+        terminal = self.rng.choice(list(self.terminals))
+        terminal_node = GPTree(str(terminal), terminal)
+
+        # Replace the subtree with a terminal node
+        self.swap_nodes(subtree, terminal_node)
+
+        return tree
+
+    @submethod
+    def skip(self, tree: GPTree) -> GPTree:
+        """Replaces a parent with its random child.
+
+        This function replaces a random parent node with its random
+        child node. The parent node is replaced with its child node and
+        the child node is detached from its parent node and reattached
+        to its grandparent node.
+
+        Args:
+            tree (GPTree): The tree that contains a node to skip.
+
+        Returns:
+            GPTree: The tree that has a random parent replaced with its
+            random child.
+        """
+        # Select a random subtree and a random terminal
+        subtree = self.rng.choice(tree.descendants)
+        skip_node, subtree.parent = subtree.parent, None
+        skip_node.children = []
+
+        if skip_node.parent is None:
+            return subtree
+
+        # Assign subtree in place of its parent (skip node)
+        self.swap_nodes(subtree, skip_node)
+
+        return tree
+
+    @submethod
+    def hoist(self, tree: GPTree) -> GPTree:
+        """Hoists a random subtree to the root.
+
+        This function hoists a random subtree of the given tree to the
+        root. The subtree is detached from its parent and made the root
+        node that is returned.
+
+        Args:
+            tree (GPTree): The tree that contains a node to hoist.
+
+        Returns:
+            GPTree: The tree that has a random subtree hoisted to the
+            root.
+        """
+        # Select a random subtree and make it root
+        subtree = self.rng.choice(tree.descendants)
+        subtree.parent = None
+
+        return subtree
+
+    @submethod
+    def renew(self, tree: GPTree) -> GPTree:
+        """Replaces a random symbol with a new one.
+
+        This function replaces a random symbol of the given tree with a
+        new one. The symbol is replaced with a new symbol of the same
+        type (terminal or non-terminal).
+
+        Args:
+            tree (GPTree): The tree that contains a node to renew.
+
+        Returns:
+            GPTree: The tree that has a random symbol replaced with a
+            new one.
+        """
+        # Select a random subtree to renew based on symbol
+        subtree = self.rng.choice(tree.descendants)
+
+        if subtree.name in self.terminals:
+            # Select a random terminal to replace the leaf with
+            terminal = self.rng.choice(list(self.terminals))
+            new_node = GPTree(str(terminal), terminal)
+        else:
+            # Select a random non-terminal to replace the subtree with
+            non_terminal = self.rng.choice(list(self.non_terminals))
+            new_node = GPTree(str(non_terminal), non_terminal)
+
+            for child in subtree.children[: non_terminal.arity]:
+                # Attach the subtree children to the new node
+                child.parent = new_node
+
+            while len(new_node.children) < non_terminal.arity:
+                # Attach random terminals to new node until full
+                terminal = self.rng.choice(list(self.terminals))
+                child_node = GPTree(str(terminal), terminal)
+                child_node.parent = new_node
+
+        # Replace the subtree with the new node
+        self.swap_nodes(subtree, new_node)
+
+        return tree
 
     @override
     def initialize_population(self) -> list[GPTree]:
@@ -224,7 +432,7 @@ class GeneticProgrammingAlgorithm(BaseRunner):
         Returns:
             list[GPTree]: A list of mutated individuals.
         """
-        # Define all possible mutation types (note: re-gen is there too)
+        # Define possible mutation types
         TYPES = [
             "grow_up",
             "grow_down",
@@ -298,88 +506,3 @@ class GeneticProgrammingAlgorithm(BaseRunner):
                 population[i] = self.generate_individual()
 
         return population
-
-    def grow_up(self, tree: GPTree) -> GPTree:
-        # Select a random subtree to grow up from
-        subtree = self.rng.choice(tree.descendants)
-
-        # Generate an ancestor subtree to attach on top of subtree
-        max_depth = max(2, self.max_depth - subtree.height)
-        ancestor = self.generate_individual(max_depth=max_depth)
-
-        # Select a random ancestor-descendant node to swap out
-        descendent = self.rng.choice(ancestor.descendants)
-        self.swap_nodes(subtree, descendent)
-
-        return ancestor
-
-    def grow_down(self, tree: GPTree) -> GPTree:
-        # Select a random subtree to grow down from
-        subtree = self.rng.choice(tree.descendants)
-
-        # Generate a descendant and attach it instead of the subtree
-        max_depth = max(1, self.max_depth - (tree.height - subtree.height))
-        descendant = self.generate_individual(max_depth=max_depth)
-        self.swap_nodes(subtree, descendant)
-
-        return tree
-
-    def shrink(self, tree: GPTree) -> GPTree:
-        # Select a random subtree and a random terminal
-        subtree = self.rng.choice(tree.descendants)
-        terminal = self.rng.choice(list(self.terminals))
-        terminal_node = GPTree(str(terminal), terminal)
-
-        # Replace the subtree with a terminal node
-        self.swap_nodes(subtree, terminal_node)
-
-        return tree
-
-    def skip(self, tree: GPTree) -> GPTree:
-        # Select a random subtree and a random terminal
-        subtree = self.rng.choice(tree.descendants)
-        skip_node, subtree.parent = subtree.parent, None
-        skip_node.children = []
-
-        if skip_node.parent is None:
-            return subtree
-
-        # Assign subtree in place of its parent (skip node)
-        self.swap_nodes(subtree, skip_node)
-
-        return tree
-
-    def hoist(self, tree: GPTree) -> GPTree:
-        # Select a random subtree and make it root
-        subtree = self.rng.choice(tree.descendants)
-        subtree.parent = None
-
-        return subtree
-
-    def renew(self, tree: GPTree) -> GPTree:
-        # Select a random subtree to renew based on symbol
-        subtree = self.rng.choice(tree.descendants)
-
-        if subtree.name in self.terminals:
-            # Select a random terminal to replace the leaf with
-            terminal = self.rng.choice(list(self.terminals))
-            new_node = GPTree(str(terminal), terminal)
-        else:
-            # Select a random non-terminal to replace the subtree with
-            non_terminal = self.rng.choice(list(self.non_terminals))
-            new_node = GPTree(str(non_terminal), non_terminal)
-
-            for child in subtree.children[: non_terminal.arity]:
-                # Attach the subtree children to the new node
-                child.parent = new_node
-
-            while len(new_node.children) < non_terminal.arity:
-                # Attach random terminals to new node until full
-                terminal = self.rng.choice(list(self.terminals))
-                child_node = GPTree(str(terminal), terminal)
-                child_node.parent = new_node
-
-        # Replace the subtree with the new node
-        self.swap_nodes(subtree, new_node)
-
-        return tree

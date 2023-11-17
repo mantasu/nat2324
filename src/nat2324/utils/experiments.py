@@ -61,6 +61,7 @@ def run_optimization_experiment(
     is_cartesian_product: bool = False,
     average: bool = True,
     dirname: str | None = None,
+    offset: int = 0,
 ) -> dict[str | tuple[str], np.ndarray]:
     if dirname is not None:
         filename = make_name(arguments, default_arguments)
@@ -86,7 +87,7 @@ def run_optimization_experiment(
     results = defaultdict(lambda: [])
 
     with Manager() as manager:
-        i = manager.Value("i", 0)
+        i = manager.Value("i", offset)
         lock = manager.Lock()
 
         args = []

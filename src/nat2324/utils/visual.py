@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, Collection
+from typing import Any, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,6 +63,7 @@ def visualize_optimization_experiments(
     scale: tuple[int, int] = (4, 4),
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
+    scales: str | list[str] = "linear",
     ignore_suffix_x: bool = False,
     ignore_suffix_y: bool = False,
     ignore_suffix_z: bool = False,
@@ -73,16 +74,6 @@ def visualize_optimization_experiments(
     xs = {k: np.array(v) for k, v in xs.items()}
     ys = {k: np.array(v) for k, v in ys.items()}
     zs = {k: np.array(v) for k, v in zs.items()} if zs is not None else None
-
-    # if is_reverse:
-    #     # Reverse the order of the arrays
-    #     xs = {k: v[..., ::-1] for k, v in xs.items()}
-
-    #     if zs is None:
-    #         ys = {k: v[..., ::-1, :] for k, v in ys.items()}
-    #     else:
-    #         ys = {k: v[..., ::-1] for k, v in ys.items()}
-    #         zs = {k: v[..., ::-1, :] for k, v in zs.items()}
 
     if curve_labels is not None and (
         isinstance(curve_labels, str) or not isinstance(curve_labels[0], list)
@@ -102,9 +93,6 @@ def visualize_optimization_experiments(
         # Convert to a list of lists
         curve_labels = new_labels
 
-    # plt.subplots_adjust(left=0.1, right=0.9, bottom=0.1, top=0.9)  # Adjust subplot parameters
-    # plt.tight_layout()
-    # plt.subplots_adjust(bottom=0.2, left=-0.2, right=0.8, top=0.8)
     x_keys = list(xs.keys())
     y_keys = list(ys.keys())
 
@@ -140,6 +128,8 @@ def visualize_optimization_experiments(
         if titles is not None and isinstance(titles, str)
         else titles
     )
+
+    scales = [scales] * len(x_keys) if isinstance(scales, str) else scales
 
     n_cols = min(len(x_keys), max_cols)
     n_rows = len(x_keys) // n_cols + (len(x_keys) % n_cols > 0)
@@ -200,6 +190,8 @@ def visualize_optimization_experiments(
 
             if labels is not None and len(labels) > 0:
                 ax.set_zlabel(labels[i], fontsize=12, fontweight="bold")
+
+            ax.set_zscale(scales[i])
         else:
             ax = fig.add_subplot(n_rows, n_cols, i + 1)
 
@@ -232,6 +224,8 @@ def visualize_optimization_experiments(
 
             if labels is not None and len(labels) > 0:
                 ax.set_ylabel(labels[i], fontsize=12, fontweight="bold")
+
+            ax.set_yscale(scales[i])
 
         if titles is not None and len(titles) > 0:
             ax.set_title(titles[i], fontsize=12, fontweight="bold")

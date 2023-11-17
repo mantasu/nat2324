@@ -1,7 +1,15 @@
 import functools
 
 
-def utilmethod(func):
+def override(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def private(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -17,7 +25,7 @@ def submethod(func):
     return wrapper
 
 
-def override(func):
+def utilmethod(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)

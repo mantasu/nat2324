@@ -10,6 +10,29 @@ from tqdm.notebook import tqdm
 
 
 class BaseRunner(ABC):
+    """Base class for optimization algorithms.
+
+    This class is the base class for all optimization algorithms. It
+    provides the basic functionality of an optimization algorithm,
+    including the ability to run the algorithm for a given number of
+    generations, evaluate the fitness function on the population, and
+    return the best individual and its fitness score.
+
+    Args:
+        fitness_fn (typing.Callable[..., float | int]): The fitness
+            function to be optimized. It can map from any input, e.g.,
+            :class:`numpy.ndarray`, to either :class:`float` or
+            :class:`int`.
+        N (int): The population size.
+        parallelize_fitness (bool, optional): Whether to parallelize
+            fitness function evaluations. If ``True``, a new process
+            will be created for each fitness evaluation. Defaults to
+            ``False``.
+        seed (int | None, optional): The seed to be used by the
+            :class:`numpy.random.Generator` object. Defaults to
+            ``None``.
+    """
+
     def __init__(
         self,
         fitness_fn: Callable[..., int | float],
@@ -281,6 +304,8 @@ class BaseRunner(ABC):
                       time (throughout all generations).
                     * ``"score"`` - the earliest best score of all time
                       (throughout all generations).
+                    * ``"scores"`` - the list of all scores throughout
+                      all generations.
                     * ``"population"`` - the population at the earliest
                       best score.
                     * ``"fitnesses"`` - the fitness scores corresponding
@@ -331,6 +356,7 @@ class BaseRunner(ABC):
         trackable = {
             "solution": population[best_index_fn(fitnesses)],
             "score": fitnesses[best_index_fn(fitnesses)],
+            "scores": [fitnesses[best_index_fn(fitnesses)]],
             "population": population,
             "fitnesses": fitnesses,
             "duration": time.time() - start_time,
@@ -357,6 +383,9 @@ class BaseRunner(ABC):
             best_idx = best_index_fn(fitnesses)
             solution = population[best_idx]
             score = fitnesses[best_idx]
+
+            # Append the score to the list of scores
+            trackable["scores"].append(score)
 
             if verbose:
                 # Update progress bar with the current best score

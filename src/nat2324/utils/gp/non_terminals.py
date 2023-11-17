@@ -1,11 +1,8 @@
 import operator
-from typing import Any, Callable
-
-import numpy as np
-from anytree import Node
+from typing import Callable
 
 from .converter import as_list, as_scalar, numpify
-from .symbol import NonTerminal, Symbol, Terminal
+from .symbol import NonTerminal, Terminal
 
 
 class Arithmetic(NonTerminal):
@@ -33,9 +30,6 @@ class Arithmetic(NonTerminal):
     def mod(cls) -> NonTerminal:
         return cls(operator.mod, 2, "%")
 
-    # def is_valid(self, *args) -> bool:
-    #     return all(isinstance(arg, (int, float, bool, list)) for arg in args)
-
     def validate(
         self,
         args: tuple[Terminal.TYPE],
@@ -53,65 +47,17 @@ class Arithmetic(NonTerminal):
         # Convert to valid scalars
         args = as_scalar(args)
 
-        if args[0] > 10e12 or args[1] > 10e12:
+        if abs(args[0]) > 10e6 or abs(args[1]) > 10e6:
             # Encourage correctness
             args = (0, 0)
 
-        if (self.name in {"/", "%"} and abs(args[1]) < 1e-9) or (
+        if (self.name in {"/", "%"} and abs(args[1]) < 1e-6) or (
             self.name == "pow" and args[1] > 100
         ):
             # Fix division and power
             args = (0, 1)
 
         return args
-
-    def pre_validate(
-        self,
-        args: tuple[Terminal.TYPE, Terminal.TYPE],
-    ) -> tuple[int | float | np.ndarray, int | float | np.ndarray]:
-        # if not self.is_valid(args[0]) and not self.is_valid(args[1]):
-        #     # Both arguments are invalid
-        #     return (1, 1)
-        # elif not self.is_valid(args[0]):
-        #     # First argument is invalid
-        #     args[0] = 1
-        # elif not self.is_valid(args[1]):
-        #     # Second argument is invalid
-        #     args[1] = 1
-
-        # # Check if either of the arguments is of type list
-        # lefts = args[0] if isinstance(args[0], list) else [args[0]]
-        # rights = args[1] if isinstance(args[0], list) else [args[1]]
-        # is_list = isinstance(args[0], list) or isinstance(args[1], list)
-
-        # if len(lefts) == 1 and len(rights) > 1:
-        #     # Ensure the same length
-        #     lefts = lefts * len(rights)
-        # elif len(lefts) > 1 and len(rights) == 1:
-        #     # Ensure the same length
-        #     rights = rights * len(lefts)
-
-        # # Initialize the valid arguments list
-        # valid_lefts, valid_rights = [], []
-
-        # Convert to valid numpy arrays of same length
-        lefts, rights = numpify(args, default=1)
-
-        for i in range(len(lefts)):
-            if (self.name in {"/", "%"} and abs(rights[i]) < 1e-9) or (
-                self.name == "pow" and rights[i] > 100
-            ):
-                # Fix division and power
-                lefts[i] = np.inf
-                rights[i] = 1
-
-        return (lefts, rights) if len(lefts) > 1 else (lefts[0], rights[0])
-
-    def post_validate(
-        self,
-        arg: int | float | np.ndarray,
-    ) -> int | float | list:
-        return arg.tolist() if isinstance(arg, np.ndarray) else arg
 
 
 class Comparison(NonTerminal):
@@ -139,53 +85,6 @@ class Comparison(NonTerminal):
     def not_equal_to(cls) -> NonTerminal:
         return cls(operator.ne, 2, "!=")
 
-    def is_valid(self, *args) -> bool:
-        return all(isinstance(arg, (int, float, bool, list)) for arg in args)
-
-    def pre_validate(
-        self,
-        args: tuple[Terminal.TYPE, Terminal.TYPE],
-    ) -> tuple[int | float | np.ndarray, int | float | np.ndarray]:
-        # if not self.is_valid(args[0]) and not self.is_valid(args[1]):
-        #     # Both arguments are invalid
-        #     return (0, 0)
-        # elif not self.is_valid(args[0]):
-        #     # First argument is invalid
-        #     args[0] = 0
-        # elif not self.is_valid(args[1]):
-        #     # Second argument is invalid
-        #     args[1] = 0
-
-        # # Check if either of the arguments is of type list
-        # lefts = args[0] if isinstance(args[0], list) else [args[0]]
-        # rights = args[1] if isinstance(args[0], list) else [args[1]]
-        # is_list = isinstance(args[0], list) or isinstance(args[1], list)
-
-        # if len(lefts) == 1 and len(rights) > 1:
-        #     # Ensure the same length
-        #     lefts = lefts * len(rights)
-        # elif len(lefts) > 1 and len(rights) == 1:
-        #     # Ensure the same length
-        #     rights = rights * len(lefts)
-
-        # if is_list:
-        #     # Return as numpy arrays for element-wise operations
-        #     return np.array(lefts), np.array(rights)
-        # else:
-        #     # Return as float | int for regular operations
-        #     return lefts[0], rights[0]
-
-        # Convert to valid numpy arrays of same length
-        lefts, rights = numpify(args, default=0)
-
-        return (lefts, rights) if len(lefts) > 1 else (lefts[0], rights[0])
-
-    def post_validate(
-        self,
-        arg: bool | np.ndarray,
-    ) -> bool:
-        return arg.all() if isinstance(arg, np.ndarray) else arg
-
 
 class Logic(NonTerminal):
     @classmethod
@@ -199,16 +98,6 @@ class Logic(NonTerminal):
     @classmethod
     def not_(cls) -> NonTerminal:
         return NonTerminal(operator.not_, 1, "!")
-
-    # def is_valid(self, *args) -> bool:
-    #     return all(isinstance(arg, (int, float, bool, list)) for arg in args)
-
-    def pre_validate(
-        self,
-        args: tuple[Terminal.TYPE, Terminal.TYPE],
-    ) -> tuple[bool, bool]:
-        lefts, rights = numpify(args, default=0, as_bool=True)
-        return lefts.all(), rights.all()
 
 
 class Flow(NonTerminal):
@@ -285,13 +174,9 @@ class Indexable:
         array: list,
         index: int,
     ) -> Terminal.TYPE:
-        # print("GET ORI", array, index)
-
         # Convert to proper types
         array = as_list(array)
         index = as_scalar(index, bounds=(-len(array), len(array) - 1), type=int)
-
-        # print("GET NEW", array, index)
 
         if len(array) == 0:
             # Empty array
