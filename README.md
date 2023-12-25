@@ -2,7 +2,22 @@
 
 ## About
 
-Natural Computing assignment for academic year 2023/2024. The source code mainly contains classes and functions that model certain algorithms and problems. Notebooks focus on experiments with those algorithms and problems. In particular see:
+Best assignment solutions for [Natural Computing 2023/2024](http://www.drps.ed.ac.uk/23-24/dpt/cxinfr11161.htm) offered by the [University of Edinburgh](https://www.ed.ac.uk/). The repository contains algorithm implementations for [Particle Swarm Optimization](https://ieeexplore.ieee.org/document/488968) (and its variants, i.e., [Cuckoo Search](https://arxiv.org/abs/1003.1594v1), [Bat Algorithm](https://arxiv.org/abs/1308.3900), [Differential Evolution](https://link.springer.com/article/10.1023/A:1008202821328)), [Genetic Algorithm](https://arxiv.org/abs/2007.12673) (canonical), and [Genetic Programming](https://link.springer.com/referenceworkentry/10.1007/978-3-540-92910-9_24) (tree-based). Two main directories:
+
+* `documents`: contains coursework description and my report
+* `notebooks`: contains experiments for each of the questions
+
+In addition, I attached my course [notes](documents/exam_notes.pdf). These are, however, squeezed into 6 pages which is what is allowed to be used during the _NOTES PERMITTED_ exam.
+
+## Feedback
+
+The coursework is worth 40% of the overall course mark, only the report is assessed but the code must be provided. Maximum points (**100**/100) were achieved with the following feedback:
+
+> Fantastic study! Your coursework meets and exceeds expectations, demonstrating a quality that could be considered for publication. Your efforts and achievements are just excellent. Well done!
+
+## Assignment Code
+
+The source code (`src`) mainly contains classes and functions that model certain algorithms and problems. Notebooks focus on experiments with those algorithms and problems. In particular see:
 
 * [problem1.ipynb](notebooks/problem1.ipynb): experiments for answering question 1 about particle cooperation
 * [problem2.ipynb](notebooks/problem2.ipynb): experiments for answering question 2 about GA and Sumplete
